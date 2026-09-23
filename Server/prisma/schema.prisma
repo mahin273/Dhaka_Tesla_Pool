@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PASSENGER
+  DRIVER
+}
+
+enum RideStatus {
+  REQUESTED
+  MATCHED
+  DRIVER_ARRIVED
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum PoolStatus {
+  MATCHED
+  DRIVER_ARRIVED
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  TESLAPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id                String              @id @default(uuid())
+  email             String              @unique
+  passwordHash      String              @map("password_hash")
+  fullName          String              @map("full_name")
+  phone             String              @unique
+  role              UserRole
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  tesla             Tesla?
+  rideRequests      RideRequest[]
+  statusChangesMade RideStatusHistory[] @relation("ChangedBy")
+
+  @@map("users")
+}
+
+model Tesla {
+  id             String   @id @default(uuid())
+  driverId       String   @unique @map("driver_id")
+  driver         User     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  name           String
+  capacity       Int
+  seatsAvailable Int      @map("seats_available")
+  isOnline       Boolean  @default(false) @map("is_online")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  pools          Pool[]
+
+  @@map("teslas")
+}
+
+model Zone {
+  id        String        @id
+  name      String        @unique
+  centerLat Float         @map("center_lat")
+  centerLng Float         @map("center_lng")
+
+  pickups   RideRequest[] @relation("PickupZone")
+  dropoffs  RideRequest[] @relation("DropoffZone")
+
+  @@map("zones")
+}
+
+model Pool {
+  id              String        @id @default(uuid())
+  teslaId         String        @map("tesla_id")
+  tesla           Tesla         @relation(fields: [teslaId], references: [id], onDelete: Cascade)
+  status          PoolStatus    @default(MATCHED)
+  matchedAt       DateTime      @default(now()) @map("matched_at")
+  driverArrivedAt DateTime?     @map("driver_arrived_at")
+  startedAt       DateTime?     @map("started_at")
+  completedAt     DateTime?     @map("completed_at")
+  cancelledAt     DateTime?     @map("cancelled_at")
+
+  rideRequests    RideRequest[]
+
+  @@index([teslaId])
+  @@index([status])
+  @@map("pools")
+}
+
+model RideRequest {
+  id                   String              @id @default(uuid())
+  passengerId          String              @map("passenger_id")
+  passenger            User                @relation(fields: [passengerId], references: [id], onDelete: Cascade)
+  poolId               String?             @map("pool_id")
+  pool                 Pool?               @relation(fields: [poolId], references: [id], onDelete: SetNull)
+
+  pickupZoneId         String              @map("pickup_zone_id")
+  pickupZone           Zone                @relation("PickupZone", fields: [pickupZoneId], references: [id])
+  pickupLat            Float               @map("pickup_lat")
+  pickupLng            Float               @map("pickup_lng")
+
+  dropoffZoneId        String              @map("dropoff_zone_id")
+  dropoffZone          Zone                @relation("DropoffZone", fields: [dropoffZoneId], references: [id])
+  dropoffLat           Float               @map("dropoff_lat")
+  dropoffLng           Float               @map("dropoff_lng")
+
+  seatsRequested       Int                 @map("seats_requested")
+  status               RideStatus          @default(REQUESTED)
+
+  distanceKm           Decimal             @map("distance_km") @db.Decimal(6, 2)
+  baseFarePoysha       Int                 @map("base_fare_poysha")
+  distanceChargePoysha Int                 @map("distance_charge_poysha")
+  poolDiscountPoysha   Int                 @default(0) @map("pool_discount_poysha")
+  totalFarePoysha      Int                 @map("total_fare_poysha")
+
+  requestedAt          DateTime            @default(now()) @map("requested_at")
+  cancelledAt          DateTime?           @map("cancelled_at")
+
+  statusHistory        RideStatusHistory[]
+  payment              Payment?
+
+  @@index([passengerId])
+  @@index([poolId])
+  @@index([status])
+  @@map("ride_requests")
+}
+
+model RideStatusHistory {
+  id            String      @id @default(uuid())
+  rideRequestId String      @map("ride_request_id")
+  rideRequest   RideRequest @relation(fields: [rideRequestId], references: [id], onDelete: Cascade)
+  fromStatus    RideStatus? @map("from_status")
+  toStatus      RideStatus  @map("to_status")
+  changedById   String?     @map("changed_by_id")
+  changedBy     User?       @relation("ChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+  changedAt     DateTime    @default(now()) @map("changed_at")
+  note          String?
+
+  @@index([rideRequestId])
+  @@map("ride_status_history")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  rideRequestId String        @unique @map("ride_request_id")
+  rideRequest   RideRequest   @relation(fields: [rideRequestId], references: [id], onDelete: Cascade)
+  method        PaymentMethod
+  amountPoysha  Int           @map("amount_poysha")
+  status        PaymentStatus @default(PENDING)
+  paidAt        DateTime?     @map("paid_at")
+
+  @@map("payments")
+}
