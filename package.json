@@ -1,0 +1,18 @@
+{
+  "name": "dhaka-tesla-pool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dhaka Tesla Pool - Share a seat. Split the fare. Survive Dhaka traffic.",
+  "scripts": {
+    "install:all": "npm install --prefix Server && npm install --prefix Client",
+    "dev:server": "npm run start:dev --prefix Server",
+    "dev:client": "npm run dev --prefix Client",
+    "build:server": "npm run build --prefix Server",
+    "build:client": "npm run build --prefix Client",
+    "build": "npm run build:server && npm run build:client",
+    "test:server": "npm test --prefix Server",
+    "test:client": "npm test --prefix Client"
+  },
+  "author": "Mahin Khan",
+  "license": "UNLICENSED"
+}

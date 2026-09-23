@@ -1,0 +1,41 @@
+# Markdown files: exclude all except README.md
+*.md
+**/*.md
+!README.md
+!**/README.md
+
+# Dependencies
+node_modules/
+Server/node_modules/
+Client/node_modules/
+
+# Build artifacts
+dist/
+Server/dist/
+Client/dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+Server/.env
+Client/.env
+
+# Logs and coverage
+logs/
+*.log
+npm-debug.log*
+coverage/
+.nyc_output/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
