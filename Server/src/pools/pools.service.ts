@@ -7,10 +7,191 @@ import {
 } from '@nestjs/common';
 import { PoolStatus, RideStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MatchingService } from '../matching/matching.service';
+import { DropoffOrder } from '../matching/interfaces/compatibility-result.interface';
 
 @Injectable()
 export class PoolsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly matchingService: MatchingService,
+  ) {}
+
+  async findCandidates(driverId: string) {
+    const tesla = await this.prisma.tesla.findUnique({
+      where: { driverId },
+    });
+
+    if (!tesla) {
+      throw new NotFoundException('Driver has no registered vehicle');
+    }
+
+    if (!tesla.isOnline) {
+      throw new BadRequestException(
+        'Driver is offline. Go online to view candidates',
+      );
+    }
+
+    if (tesla.seatsAvailable <= 0) {
+      return {
+        teslaId: tesla.id,
+        seatsAvailable: 0,
+        activePoolId: null,
+        activePassengersCount: 0,
+        candidates: [],
+      };
+    }
+
+    // Check if driver has an active pool
+    const activePool = await this.prisma.pool.findFirst({
+      where: {
+        teslaId: tesla.id,
+        status: { in: [PoolStatus.MATCHED, PoolStatus.DRIVER_ARRIVED] },
+      },
+      include: {
+        rideRequests: {
+          where: {
+            status: { in: [RideStatus.MATCHED, RideStatus.DRIVER_ARRIVED] },
+          },
+          include: {
+            pickupZone: true,
+            dropoffZone: true,
+            passenger: {
+              select: { id: true, fullName: true, phone: true },
+            },
+          },
+        },
+      },
+    });
+
+    // Query open ride requests that can fit in remaining seats
+    const openRequests = await this.prisma.rideRequest.findMany({
+      where: {
+        status: RideStatus.REQUESTED,
+        seatsRequested: { lte: tesla.seatsAvailable },
+      },
+      include: {
+        pickupZone: true,
+        dropoffZone: true,
+        passenger: {
+          select: { id: true, fullName: true, phone: true },
+        },
+      },
+      orderBy: { requestedAt: 'asc' },
+    });
+
+    const activeRiders = activePool?.rideRequests ?? [];
+
+    const candidates = openRequests.map((req) => {
+      // If car is empty (no active riders), candidate can start a new pool
+      if (activeRiders.length === 0) {
+        return {
+          rideRequestId: req.id,
+          passenger: req.passenger,
+          pickupZone: req.pickupZone,
+          dropoffZone: req.dropoffZone,
+          seatsRequested: req.seatsRequested,
+          baseFarePoysha: req.baseFarePoysha,
+          distanceChargePoysha: req.distanceChargePoysha,
+          totalFarePoysha: req.totalFarePoysha,
+          distanceKm: Number(req.distanceKm),
+          compatible: true,
+          detourKm: 0,
+          pickupDistanceKm: 0,
+          bestOrder: DropoffOrder.DROP_A_THEN_B,
+          reason: 'Car is currently empty; candidate can initiate new pool',
+        };
+      }
+
+      // If active riders exist, evaluate candidate against all active riders
+      const candidateLeg = {
+        pickup: {
+          lat: req.pickupLat,
+          lng: req.pickupLng,
+        },
+        dropoff: {
+          lat: req.dropoffLat,
+          lng: req.dropoffLng,
+        },
+      };
+
+      let isAllCompatible = true;
+      let maxDetour = 0;
+      let maxPickupDist = 0;
+      let bestOrder = DropoffOrder.DROP_A_THEN_B;
+      let rejectionReason: string | undefined;
+
+      for (const rider of activeRiders) {
+        const riderLeg = {
+          pickup: {
+            lat: rider.pickupLat,
+            lng: rider.pickupLng,
+          },
+          dropoff: {
+            lat: rider.dropoffLat,
+            lng: rider.dropoffLng,
+          },
+        };
+
+        const result = this.matchingService.evaluateCompatibility(
+          riderLeg,
+          candidateLeg,
+        );
+
+        if (!result.compatible) {
+          isAllCompatible = false;
+          rejectionReason = result.reason;
+          maxDetour = result.detourKm ?? 999.0;
+          maxPickupDist = Math.max(maxPickupDist, result.pickupDistanceKm);
+          break;
+        }
+
+        maxDetour = Math.max(maxDetour, result.detourKm ?? 0);
+        maxPickupDist = Math.max(maxPickupDist, result.pickupDistanceKm);
+        if (result.bestOrder) {
+          bestOrder = result.bestOrder;
+        }
+      }
+
+      return {
+        rideRequestId: req.id,
+        passenger: req.passenger,
+        pickupZone: req.pickupZone,
+        dropoffZone: req.dropoffZone,
+        seatsRequested: req.seatsRequested,
+        baseFarePoysha: req.baseFarePoysha,
+        distanceChargePoysha: req.distanceChargePoysha,
+        totalFarePoysha: req.totalFarePoysha,
+        distanceKm: Number(req.distanceKm),
+        compatible: isAllCompatible,
+        detourKm: maxDetour,
+        pickupDistanceKm: maxPickupDist,
+        bestOrder,
+        reason: isAllCompatible
+          ? `Compatible: detour of ${maxDetour} km is within acceptable limits`
+          : (rejectionReason ?? 'Route detour exceeds limits'),
+      };
+    });
+
+    // Sort: compatible candidates first (lowest detour), then incompatible (lowest pickup distance)
+    candidates.sort((a, b) => {
+      if (a.compatible && !b.compatible) return -1;
+      if (!a.compatible && b.compatible) return 1;
+      if (a.compatible && b.compatible) {
+        return a.detourKm - b.detourKm;
+      }
+      return a.pickupDistanceKm - b.pickupDistanceKm;
+    });
+
+    return {
+      teslaId: tesla.id,
+      seatsAvailable: tesla.seatsAvailable,
+      activePoolId: activePool ? activePool.id : null,
+      activePassengersCount: activeRiders.length,
+      candidates,
+    };
+  }
+
 
   async claimSeats(
     driverId: string,
