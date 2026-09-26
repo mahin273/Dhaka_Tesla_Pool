@@ -12,6 +12,13 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class PoolsController {
   constructor(private readonly poolsService: PoolsService) {}
 
+  @Get('candidates')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.DRIVER)
+  async getCandidates(@CurrentUser() user: { id: string }) {
+    return this.poolsService.findCandidates(user.id);
+  }
+
   @Post('claim')
   @UseGuards(RolesGuard)
   @Roles(UserRole.DRIVER)
