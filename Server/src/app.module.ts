@@ -6,9 +6,17 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ZonesModule } from './zones/zones.module';
 import { TeslasModule } from './teslas/teslas.module';
+import { FaresModule } from './fares/fares.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, ZonesModule, TeslasModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    ZonesModule,
+    TeslasModule,
+    FaresModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
