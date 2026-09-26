@@ -1,7 +1,16 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PoolsService } from './pools.service';
 import { ClaimSeatsDto } from './dto/claim-seats.dto';
+import { UpdatePoolStatusDto } from './dto/update-pool-status.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -34,8 +43,50 @@ export class PoolsController {
     );
   }
 
+  @Post(':id/arrive')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.DRIVER)
+  async arrive(
+    @CurrentUser() user: { id: string },
+    @Param('id') poolId: string,
+  ) {
+    return this.poolsService.arrive(user.id, poolId);
+  }
+
+  @Post(':id/start')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.DRIVER)
+  async startTrip(
+    @CurrentUser() user: { id: string },
+    @Param('id') poolId: string,
+  ) {
+    return this.poolsService.startTrip(user.id, poolId);
+  }
+
+  @Post(':id/complete')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.DRIVER)
+  async completeTrip(
+    @CurrentUser() user: { id: string },
+    @Param('id') poolId: string,
+  ) {
+    return this.poolsService.completeTrip(user.id, poolId);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.DRIVER)
+  async updateStatus(
+    @CurrentUser() user: { id: string },
+    @Param('id') poolId: string,
+    @Body() dto: UpdatePoolStatusDto,
+  ) {
+    return this.poolsService.updatePoolStatus(user.id, poolId, dto.status);
+  }
+
   @Get(':id')
   async getPool(@Param('id') id: string) {
     return this.poolsService.getPoolById(id);
   }
 }
+

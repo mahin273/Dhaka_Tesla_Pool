@@ -5,7 +5,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PoolStatus, RideStatus } from '@prisma/client';
+import {
+  PaymentMethod,
+  PaymentStatus,
+  PoolStatus,
+  RideStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
 import { DropoffOrder } from '../matching/interfaces/compatibility-result.interface';
@@ -341,4 +346,239 @@ export class PoolsService {
 
     return pool;
   }
+
+  async arrive(driverId: string, poolId: string) {
+    const pool = await this.prisma.pool.findUnique({
+      where: { id: poolId },
+      include: {
+        tesla: true,
+        rideRequests: {
+          where: { status: RideStatus.MATCHED },
+        },
+      },
+    });
+
+    if (!pool) {
+      throw new NotFoundException('Pool not found');
+    }
+
+    if (pool.tesla.driverId !== driverId) {
+      throw new ForbiddenException(
+        'You do not drive the vehicle for this pool',
+      );
+    }
+
+    if (pool.status !== PoolStatus.MATCHED) {
+      throw new BadRequestException(
+        `Cannot mark arrived: pool is currently in ${pool.status} status`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedPool = await tx.pool.update({
+        where: { id: poolId },
+        data: {
+          status: PoolStatus.DRIVER_ARRIVED,
+          driverArrivedAt: new Date(),
+        },
+      });
+
+      const updatedRequests = [];
+      for (const req of pool.rideRequests) {
+        const updated = await tx.rideRequest.update({
+          where: { id: req.id },
+          data: { status: RideStatus.DRIVER_ARRIVED },
+        });
+
+        await tx.rideStatusHistory.create({
+          data: {
+            rideRequestId: req.id,
+            fromStatus: RideStatus.MATCHED,
+            toStatus: RideStatus.DRIVER_ARRIVED,
+            changedById: driverId,
+            note: 'Driver arrived at pickup zone',
+          },
+        });
+
+        updatedRequests.push(updated);
+      }
+
+      return {
+        ...updatedPool,
+        rideRequests: updatedRequests,
+      };
+    });
+  }
+
+  async startTrip(driverId: string, poolId: string) {
+    const pool = await this.prisma.pool.findUnique({
+      where: { id: poolId },
+      include: {
+        tesla: true,
+        rideRequests: {
+          where: { status: RideStatus.DRIVER_ARRIVED },
+        },
+      },
+    });
+
+    if (!pool) {
+      throw new NotFoundException('Pool not found');
+    }
+
+    if (pool.tesla.driverId !== driverId) {
+      throw new ForbiddenException(
+        'You do not drive the vehicle for this pool',
+      );
+    }
+
+    if (pool.status !== PoolStatus.DRIVER_ARRIVED) {
+      throw new BadRequestException(
+        `Cannot start trip: pool is currently in ${pool.status} status`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedPool = await tx.pool.update({
+        where: { id: poolId },
+        data: {
+          status: PoolStatus.STARTED,
+          startedAt: new Date(),
+        },
+      });
+
+      const updatedRequests = [];
+      for (const req of pool.rideRequests) {
+        const updated = await tx.rideRequest.update({
+          where: { id: req.id },
+          data: { status: RideStatus.STARTED },
+        });
+
+        await tx.rideStatusHistory.create({
+          data: {
+            rideRequestId: req.id,
+            fromStatus: RideStatus.DRIVER_ARRIVED,
+            toStatus: RideStatus.STARTED,
+            changedById: driverId,
+            note: 'Trip started and passengers onboard',
+          },
+        });
+
+        updatedRequests.push(updated);
+      }
+
+      return {
+        ...updatedPool,
+        rideRequests: updatedRequests,
+      };
+    });
+  }
+
+  async completeTrip(driverId: string, poolId: string) {
+    const pool = await this.prisma.pool.findUnique({
+      where: { id: poolId },
+      include: {
+        tesla: true,
+        rideRequests: {
+          where: { status: RideStatus.STARTED },
+        },
+      },
+    });
+
+    if (!pool) {
+      throw new NotFoundException('Pool not found');
+    }
+
+    if (pool.tesla.driverId !== driverId) {
+      throw new ForbiddenException(
+        'You do not drive the vehicle for this pool',
+      );
+    }
+
+    if (pool.status !== PoolStatus.STARTED) {
+      throw new BadRequestException(
+        `Cannot complete trip: pool is currently in ${pool.status} status`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedPool = await tx.pool.update({
+        where: { id: poolId },
+        data: {
+          status: PoolStatus.COMPLETED,
+          completedAt: new Date(),
+        },
+      });
+
+      // Release seats back to vehicle up to capacity
+      const freedSeats = pool.rideRequests.reduce(
+        (sum, req) => sum + req.seatsRequested,
+        0,
+      );
+
+      await tx.$executeRaw`
+        UPDATE teslas
+        SET seats_available = LEAST(capacity, seats_available + ${freedSeats}),
+            updated_at = NOW()
+        WHERE id = ${pool.teslaId}
+      `;
+
+      const updatedRequests = [];
+      const createdPayments = [];
+
+      for (const req of pool.rideRequests) {
+        const updated = await tx.rideRequest.update({
+          where: { id: req.id },
+          data: { status: RideStatus.COMPLETED },
+        });
+
+        await tx.rideStatusHistory.create({
+          data: {
+            rideRequestId: req.id,
+            fromStatus: RideStatus.STARTED,
+            toStatus: RideStatus.COMPLETED,
+            changedById: driverId,
+            note: 'Trip completed and dropoff confirmed',
+          },
+        });
+
+        const payment = await tx.payment.create({
+          data: {
+            rideRequestId: req.id,
+            method: PaymentMethod.CASH,
+            amountPoysha: req.totalFarePoysha,
+            status: PaymentStatus.PENDING,
+          },
+        });
+
+        updatedRequests.push(updated);
+        createdPayments.push(payment);
+      }
+
+      return {
+        ...updatedPool,
+        rideRequests: updatedRequests,
+        payments: createdPayments,
+      };
+    });
+  }
+
+  async updatePoolStatus(
+    driverId: string,
+    poolId: string,
+    targetStatus: PoolStatus,
+  ) {
+    switch (targetStatus) {
+      case PoolStatus.DRIVER_ARRIVED:
+        return this.arrive(driverId, poolId);
+      case PoolStatus.STARTED:
+        return this.startTrip(driverId, poolId);
+      case PoolStatus.COMPLETED:
+        return this.completeTrip(driverId, poolId);
+      default:
+        throw new BadRequestException(
+          `Unsupported target status transition to ${targetStatus}`,
+        );
+    }
+  }
 }
+
