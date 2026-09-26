@@ -8,6 +8,7 @@ import { ZonesModule } from './zones/zones.module';
 import { TeslasModule } from './teslas/teslas.module';
 import { FaresModule } from './fares/fares.module';
 import { MatchingModule } from './matching/matching.module';
+import { RideRequestsModule } from './ride-requests/ride-requests.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { MatchingModule } from './matching/matching.module';
     TeslasModule,
     FaresModule,
     MatchingModule,
+    RideRequestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
