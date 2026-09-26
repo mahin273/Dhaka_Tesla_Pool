@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { ZonesModule } from './zones/zones.module';
 import { TeslasModule } from './teslas/teslas.module';
 import { FaresModule } from './fares/fares.module';
+import { MatchingModule } from './matching/matching.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { FaresModule } from './fares/fares.module';
     ZonesModule,
     TeslasModule,
     FaresModule,
+    MatchingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
