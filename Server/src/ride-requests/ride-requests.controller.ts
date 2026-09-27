@@ -11,6 +11,7 @@ import { RideRequestsService } from './ride-requests.service';
 import { CreateRideRequestDto } from './dto/create-ride-request.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { RideOwnershipGuard } from '../common/guards/ride-ownership.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -37,6 +38,7 @@ export class RideRequestsController {
   }
 
   @Get(':id')
+  @UseGuards(RideOwnershipGuard)
   async getRequestById(
     @CurrentUser() user: { id: string; role?: UserRole },
     @Param('id') id: string,
@@ -45,7 +47,7 @@ export class RideRequestsController {
   }
 
   @Post(':id/cancel')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, RideOwnershipGuard)
   @Roles(UserRole.PASSENGER)
   async cancel(
     @CurrentUser() user: { id: string },
@@ -54,3 +56,4 @@ export class RideRequestsController {
     return this.rideRequestsService.cancel(user.id, id);
   }
 }
+
