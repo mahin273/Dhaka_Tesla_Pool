@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   UseGuards,
@@ -47,6 +49,7 @@ export class RideRequestsController {
   }
 
   @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard, RideOwnershipGuard)
   @Roles(UserRole.PASSENGER)
   async cancel(
