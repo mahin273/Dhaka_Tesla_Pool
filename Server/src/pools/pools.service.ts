@@ -349,6 +349,11 @@ export class PoolsService {
               riderLeg,
               candidateLeg,
             );
+            if (!comp.compatible) {
+              throw new BadRequestException(
+                `Cannot claim ride request ${req.id}: ${comp.reason}`,
+              );
+            }
             if (comp.overlapKm !== undefined) {
               overlapKm = Math.min(overlapKm, comp.overlapKm);
             }

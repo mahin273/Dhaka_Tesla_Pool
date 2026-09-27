@@ -172,7 +172,7 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                           )}
                         </>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
                           <AlertTriangle className="w-3 h-3" />
                           <span>
                             {candidate.detourKm > 0
@@ -182,7 +182,7 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                         </span>
                       )}
 
-                      {candidate.bestOrder && (
+                      {candidate.compatible && candidate.bestOrder && (
                         <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                           Sequence: {candidate.bestOrder.replace(/_/g, ' ')}
                         </span>
@@ -206,13 +206,13 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                     <button
                       type="button"
                       onClick={() => claimMutation.mutate(candidate)}
-                      disabled={isClaiming || claimMutation.isPending || !canFit}
-                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-md ${
+                      disabled={isClaiming || claimMutation.isPending || !canFit || !candidate.compatible}
+                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-md ${
                         !canFit
                           ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          : candidate.compatible
-                          ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/10'
-                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/10'
+                          : !candidate.compatible
+                          ? 'bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed'
+                          : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/10 cursor-pointer'
                       }`}
                     >
                       {isClaiming ? (
@@ -222,6 +222,8 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                         </>
                       ) : !canFit ? (
                         <span>Vehicle Full</span>
+                      ) : !candidate.compatible ? (
+                        <span>Cannot Pool</span>
                       ) : (
                         <>
                           <span>Accept & Claim</span>
