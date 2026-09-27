@@ -92,6 +92,31 @@ export interface Payment {
   paidAt?: string | null;
 }
 
+export interface CandidatePassenger {
+  rideRequestId: string;
+  passenger: { id: string; fullName: string; phone: string };
+  pickupZone: Zone;
+  dropoffZone: Zone;
+  seatsRequested: number;
+  baseFarePoysha: number;
+  distanceChargePoysha: number;
+  totalFarePoysha: number;
+  distanceKm: number;
+  compatible: boolean;
+  detourKm: number;
+  pickupDistanceKm: number;
+  bestOrder?: string;
+  reason?: string;
+}
+
+export interface CandidateResponse {
+  teslaId: string;
+  seatsAvailable: number;
+  activePoolId: string | null;
+  activePassengersCount: number;
+  candidates: CandidatePassenger[];
+}
+
 export interface AuthResponse {
   accessToken: string;
   user: User;
@@ -104,3 +129,4 @@ export interface ApiErrorPayload {
   message: string | string[];
   error: string;
 }
+
