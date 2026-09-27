@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, AuthResponse } from '../types';
+import { User, AuthResponse, SignupPayload } from '../types';
 import { apiClient } from '../api/client';
 
 export type StoryCastKey = 'jashim' | 'nusrat' | 'shirin' | 'rafiq';
@@ -55,6 +55,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User>;
   loginAs: (castKey: StoryCastKey) => Promise<User>;
+  signup: (payload: SignupPayload) => Promise<User>;
   logout: () => void;
 }
 
@@ -99,6 +100,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return res.user;
   };
 
+  const signup = async (payload: SignupPayload): Promise<User> => {
+    const res = await apiClient.post<AuthResponse>('/auth/signup', payload);
+
+    localStorage.setItem('accessToken', res.accessToken);
+    localStorage.setItem('user', JSON.stringify(res.user));
+
+    setToken(res.accessToken);
+    setUser(res.user);
+
+    return res.user;
+  };
+
   const loginAs = async (castKey: StoryCastKey): Promise<User> => {
     const cast = STORY_CAST[castKey];
     return login(cast.email, cast.password);
@@ -119,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         isLoading,
         login,
         loginAs,
+        signup,
         logout,
       }}
     >
