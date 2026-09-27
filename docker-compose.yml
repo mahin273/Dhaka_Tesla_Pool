@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dhaka-tesla-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-dhaka_tesla_pool}
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-dhaka_tesla_pool}"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+      start_period: 2s
+    networks:
+      - dhaka-tesla-net
+
+  server:
+    build:
+      context: ./Server
+      dockerfile: Dockerfile
+    container_name: dhaka-tesla-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-dhaka_tesla_pool}?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dhaka_tesla_pool_super_secret_access_jwt_key_2026}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dhaka_tesla_pool_super_secret_refresh_jwt_key_2026}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
+      CORS_ORIGIN: http://localhost:5173,http://localhost:5174,http://localhost:80,http://localhost
+    ports:
+      - "4000:4000"
+    networks:
+      - dhaka-tesla-net
+
+  client:
+    build:
+      context: ./Client
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4000
+    container_name: dhaka-tesla-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "5174:80"
+    networks:
+      - dhaka-tesla-net
+
+volumes:
+  postgres_data:
+    name: dhaka_tesla_postgres_data
+
+networks:
+  dhaka-tesla-net:
+    name: dhaka_tesla_net
+    driver: bridge
