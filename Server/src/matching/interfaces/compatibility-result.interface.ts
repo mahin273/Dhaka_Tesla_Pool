@@ -8,6 +8,7 @@ export interface CompatibilityResult {
   pickupDistanceKm: number;
   bestOrder?: DropoffOrder;
   detourKm?: number;
+  overlapKm?: number;
   directDistanceAKm?: number;
   directDistanceBKm?: number;
   reason: string;

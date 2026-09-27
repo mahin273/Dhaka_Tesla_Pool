@@ -72,7 +72,7 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
             Nearby Passenger Requests
           </h2>
           <p className="text-xs text-slate-400">
-            Real-time pooling matches evaluated against 3.5 km pickup cluster and 2.5 km detour threshold.
+            Corridor-aligned matches evaluated against 1.5 km pickup proximity and 1.3x detour ratio bound.
           </p>
         </div>
 
@@ -158,12 +158,19 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                     {/* Spatial Compatibility Badge */}
                     <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
                       {candidate.compatible ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>
-                            Compatible (+{candidate.detourKm} km detour)
+                        <>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>
+                              Corridor Match (+{candidate.detourKm} km detour)
+                            </span>
                           </span>
-                        </span>
+                          {candidate.overlapKm !== undefined && candidate.overlapKm > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                              <span>{candidate.overlapKm} km Shared Overlap</span>
+                            </span>
+                          )}
+                        </>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
                           <AlertTriangle className="w-3 h-3" />

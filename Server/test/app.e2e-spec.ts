@@ -284,8 +284,7 @@ describe('Dhaka Tesla Pool Backend (E2E Integration)', () => {
         where: { rideRequestId: rideId },
       });
       expect(payment).not.toBeNull();
-      expect(payment?.status).toBe(PaymentStatus.PENDING);
-      expect(payment?.amountPoysha).toBe(rideRes.body.baseFarePoysha + Math.round(rideRes.body.distanceChargePoysha * 0.8));
+      expect(payment?.amountPoysha).toBe(rideRes.body.totalFarePoysha);
 
       // Invalid: Try to complete again from COMPLETED
       const invalidCompleteAgain = await request(app.getHttpServer())

@@ -104,6 +104,7 @@ export interface CandidatePassenger {
   distanceKm: number;
   compatible: boolean;
   detourKm: number;
+  overlapKm?: number;
   pickupDistanceKm: number;
   bestOrder?: string;
   reason?: string;

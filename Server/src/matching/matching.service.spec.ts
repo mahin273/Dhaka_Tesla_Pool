@@ -66,17 +66,17 @@ describe('MatchingService', () => {
       expect(result.detourKm).toBe(2.0);
       expect(result.directDistanceAKm).toBe(2.3);
       expect(result.directDistanceBKm).toBe(2.2);
-      expect(result.reason).toContain('within acceptable limits');
+      expect(result.reason).toContain('corridor aligned');
     });
 
-    it('rejects pooling when pickups exceed cluster radius of 3.5 km', () => {
+    it('rejects pooling when pickups exceed proximity threshold of 1.5 km', () => {
       const legUttara = { pickup: UTTARA, dropoff: BANANI };
       const legDhanmondi = { pickup: DHANMONDI, dropoff: MOHAKHALI };
 
       const result = service.evaluateCompatibility(legUttara, legDhanmondi);
 
       expect(result.compatible).toBe(false);
-      expect(result.reason).toContain('Pickups exceed cluster radius');
+      expect(result.reason).toContain('Pickups exceed proximity threshold');
     });
 
     it('rejects pooling for divergent destinations with excessive detour', () => {

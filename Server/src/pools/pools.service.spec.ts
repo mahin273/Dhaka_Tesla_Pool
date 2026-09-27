@@ -192,7 +192,9 @@ describe('PoolsService', () => {
       // Incompatible Uttara must be sorted second
       expect(result.candidates[1].rideRequestId).toBe('req-uttara');
       expect(result.candidates[1].compatible).toBe(false);
-      expect(result.candidates[1].reason).toContain('Pickups exceed cluster radius');
+      expect(result.candidates[1].reason).toContain(
+        'Pickups exceed proximity threshold',
+      );
     });
   });
 
