@@ -41,9 +41,13 @@ export interface FareCalculation {
   potentialPooledTotalPoysha: number;
 }
 
-export function calculateEstimatedFare(distanceKm: number): FareCalculation {
-  const baseFarePoysha = BASE_FARE_POYSHA;
-  const distanceChargePoysha = Math.round(distanceKm * PER_KM_RATE_POYSHA);
+export function calculateEstimatedFare(
+  distanceKm: number,
+  seatsRequested = 1,
+): FareCalculation {
+  const baseFarePoysha = BASE_FARE_POYSHA * seatsRequested;
+  const distanceChargePoysha =
+    Math.round(distanceKm * PER_KM_RATE_POYSHA) * seatsRequested;
   const soloTotalPoysha = baseFarePoysha + distanceChargePoysha;
   const potentialPoolDiscountPoysha = Math.round(
     distanceChargePoysha * POOL_DISCOUNT_PERCENT,

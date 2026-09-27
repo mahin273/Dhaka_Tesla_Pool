@@ -15,4 +15,10 @@ export class EstimateFareDto {
   })
   @IsBoolean()
   isPooled?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  seats?: number;
 }

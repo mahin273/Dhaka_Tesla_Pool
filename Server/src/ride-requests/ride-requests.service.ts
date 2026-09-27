@@ -53,7 +53,12 @@ export class RideRequestsService {
       { lat: dto.dropoffLat, lng: dto.dropoffLng },
     );
 
-    const fare = this.faresService.calculateFare(distanceKm, false);
+    const fare = this.faresService.calculateFare(
+      distanceKm,
+      false,
+      undefined,
+      dto.seatsRequested,
+    );
 
     const created = await this.prisma.$transaction(async (tx) => {
       const request = await tx.rideRequest.create({

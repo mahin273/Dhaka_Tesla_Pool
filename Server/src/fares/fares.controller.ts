@@ -9,6 +9,11 @@ export class FaresController {
 
   @Get('estimate')
   estimateFare(@Query() query: EstimateFareDto): FareBreakdown {
-    return this.faresService.calculateFare(query.distanceKm, query.isPooled);
+    return this.faresService.calculateFare(
+      query.distanceKm,
+      query.isPooled,
+      undefined,
+      query.seats ?? 1,
+    );
   }
 }
