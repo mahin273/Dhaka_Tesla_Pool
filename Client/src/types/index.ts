@@ -26,6 +26,14 @@ export interface User {
   role: UserRole;
 }
 
+export interface SignupPayload {
+  email: string;
+  password: string;
+  fullName: string;
+  phone: string;
+  role: UserRole;
+}
+
 export interface Zone {
   id: string;
   name: string;
