@@ -2,7 +2,7 @@ import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import { Tesla } from '../../types';
-import { Car, Power, Users, BatteryCharging } from 'lucide-react';
+import { Car, Power, Users } from 'lucide-react';
 
 interface DriverStatusToggleProps {
   tesla: Tesla | null;
@@ -88,35 +88,14 @@ export const DriverStatusToggle: React.FC<DriverStatusToggleProps> = ({
         </div>
       </div>
 
-      {/* Vehicle Capacity Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-800/80 text-xs">
-        <div className="bg-slate-950 border border-slate-850 p-2.5 rounded-xl">
-          <div className="text-slate-400 text-[11px] flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Seats Available</span>
-          </div>
-          <div className="text-sm font-bold text-white font-mono mt-0.5">
-            {seatsAvailable} / {capacity} Free
-          </div>
+      {/* Vehicle Seating Capacity */}
+      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+        <div className="text-slate-400 flex items-center gap-2">
+          <Users className="w-4 h-4 text-cyan-400" />
+          <span>Vehicle Seating Capacity</span>
         </div>
-
-        <div className="bg-slate-950 border border-slate-850 p-2.5 rounded-xl">
-          <div className="text-slate-400 text-[11px] flex items-center gap-1.5">
-            <BatteryCharging className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Powertrain Status</span>
-          </div>
-          <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">
-            Optimal (100% EV)
-          </div>
-        </div>
-
-        <div className="col-span-2 sm:col-span-1 bg-slate-950 border border-slate-850 p-2.5 rounded-xl">
-          <div className="text-slate-400 text-[11px]">
-            Atomic Concurrency
-          </div>
-          <div className="text-sm font-bold text-slate-300 font-mono mt-0.5">
-            ACID Protected
-          </div>
+        <div className="text-sm font-bold text-white font-mono bg-slate-950 px-3 py-1 rounded-lg border border-slate-850">
+          {seatsAvailable} / {capacity} Seats Free
         </div>
       </div>
     </div>
