@@ -174,7 +174,7 @@ export class PoolsService {
         if (!result.compatible) {
           isAllCompatible = false;
           rejectionReason = result.reason;
-          maxDetour = result.detourKm ?? 999.0;
+          maxDetour = result.detourKm ?? 0;
           maxPickupDist = Math.max(maxPickupDist, result.pickupDistanceKm);
           break;
         }

@@ -175,7 +175,9 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
                           <AlertTriangle className="w-3 h-3" />
                           <span>
-                            Detour Alert (+{candidate.detourKm} km)
+                            {candidate.detourKm > 0
+                              ? `Detour Alert (+${candidate.detourKm} km)`
+                              : 'Not Poolable'}
                           </span>
                         </span>
                       )}
