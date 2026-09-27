@@ -1,51 +1,56 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { LoginPage } from './pages/LoginPage';
+import { PassengerPage } from './pages/PassengerPage';
+import { DriverPage } from './pages/DriverPage';
 
-interface HealthResponse {
-  status: string;
-  service: string;
-  timestamp: string;
-}
+const RootRedirect: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to={user.role === 'DRIVER' ? '/driver' : '/passenger'} replace />;
+};
 
 export const App: React.FC = () => {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    fetch('http://localhost:4000/health')
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((data: HealthResponse) => {
-        setHealth(data);
-        setLoading(false);
-      })
-      .catch((err: Error) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, []);
-
   return (
-    <div>
-      <h1>Dhaka Tesla Pool</h1>
-      <p>Share a seat. Split the fare. Survive Dhaka traffic.</p>
-      <div>
-        <h2>System Status</h2>
-        {loading && <p>Checking backend connection...</p>}
-        {error && <p>Backend offline or unreachable: {error}</p>}
-        {health && (
-          <div style={{ textAlign: 'left', background: '#1e293b', padding: '1rem', borderRadius: '8px' }}>
-            <p><strong>Status:</strong> {health.status}</p>
-            <p><strong>Service:</strong> {health.service}</p>
-            <p><strong>Backend Timestamp:</strong> {health.timestamp}</p>
-          </div>
-        )}
-      </div>
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/passenger"
+            element={
+              <ProtectedRoute allowedRole="PASSENGER">
+                <PassengerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/driver"
+            element={
+              <ProtectedRoute allowedRole="DRIVER">
+                <DriverPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 };
 
