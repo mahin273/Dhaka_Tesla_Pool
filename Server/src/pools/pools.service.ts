@@ -37,16 +37,6 @@ export class PoolsService {
       );
     }
 
-    if (tesla.seatsAvailable <= 0) {
-      return {
-        teslaId: tesla.id,
-        seatsAvailable: 0,
-        activePoolId: null,
-        activePassengersCount: 0,
-        candidates: [],
-      };
-    }
-
     // Check if driver has an active pool
     const activePool = await this.prisma.pool.findFirst({
       where: {
@@ -82,6 +72,18 @@ export class PoolsService {
       },
     });
 
+    const activeRiders = activePool?.rideRequests ?? [];
+
+    if (tesla.seatsAvailable <= 0) {
+      return {
+        teslaId: tesla.id,
+        seatsAvailable: 0,
+        activePoolId: activePool ? activePool.id : null,
+        activePassengersCount: activeRiders.length,
+        candidates: [],
+      };
+    }
+
     // Query open ride requests that can fit in remaining seats
     const openRequests = await this.prisma.rideRequest.findMany({
       where: {
@@ -97,8 +99,6 @@ export class PoolsService {
       },
       orderBy: { requestedAt: 'asc' },
     });
-
-    const activeRiders = activePool?.rideRequests ?? [];
 
     const candidates = openRequests.map((req) => {
       // If car is empty (no active riders), candidate can start a new pool
