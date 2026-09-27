@@ -90,5 +90,36 @@ describe('FaresService', () => {
       expect(fare.poolDiscountPoysha).toBe(560);
       expect(fare.totalFarePoysha).toBe(2500 + 2799 - 560);
     });
+
+    it('calculates 2-seat solo fare correctly with strict per-seat scaling', () => {
+      const fare = service.calculateFare(2.3, false, undefined, 2);
+
+      expect(fare.distanceKm).toBe(2.3);
+      expect(fare.baseFarePoysha).toBe(5000);
+      expect(fare.distanceChargePoysha).toBe(8280);
+      expect(fare.poolDiscountPoysha).toBe(0);
+      expect(fare.totalFarePoysha).toBe(13280);
+      expect(fare.formatted.totalFareTaka).toBe('132.80');
+    });
+
+    it('calculates 3-seat full vehicle buyout correctly', () => {
+      const fare = service.calculateFare(2.3, false, undefined, 3);
+
+      expect(fare.distanceKm).toBe(2.3);
+      expect(fare.baseFarePoysha).toBe(7500);
+      expect(fare.distanceChargePoysha).toBe(12420);
+      expect(fare.poolDiscountPoysha).toBe(0);
+      expect(fare.totalFarePoysha).toBe(19920);
+      expect(fare.formatted.totalFareTaka).toBe('199.20');
+    });
+
+    it('throws BadRequestException for seats less than 1', () => {
+      expect(() => service.calculateFare(2.3, false, undefined, 0)).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.calculateFare(2.3, false, undefined, -1)).toThrow(
+        'Seats must be at least 1',
+      );
+    });
   });
 });

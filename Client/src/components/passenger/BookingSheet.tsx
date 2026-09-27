@@ -43,7 +43,10 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({ onRideCreated }) => 
         )
       : 0;
 
-  const fareEstimate = distanceKm > 0 ? calculateEstimatedFare(distanceKm) : null;
+  const fareEstimate =
+    distanceKm > 0
+      ? calculateEstimatedFare(distanceKm, seatsRequested)
+      : null;
 
   // Booking Mutation
   const bookMutation = useMutation({

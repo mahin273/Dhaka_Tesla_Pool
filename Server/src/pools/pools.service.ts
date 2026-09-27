@@ -389,7 +389,8 @@ export class PoolsService {
           overlapKm = 0;
         }
 
-        const rawDiscount = Math.round(overlapKm * 1800 * 0.2);
+        const rawDiscount =
+          Math.round(overlapKm * 1800 * 0.2) * req.seatsRequested;
         const discountPoysha = Math.min(rawDiscount, req.distanceChargePoysha);
         const totalFarePoysha =
           req.baseFarePoysha + req.distanceChargePoysha - discountPoysha;
@@ -448,7 +449,7 @@ export class PoolsService {
 
             if (maxOverlap > 0) {
               const existingDiscount = Math.min(
-                Math.round(maxOverlap * 1800 * 0.2),
+                Math.round(maxOverlap * 1800 * 0.2) * existing.seatsRequested,
                 existing.distanceChargePoysha,
               );
               const existingTotal =
