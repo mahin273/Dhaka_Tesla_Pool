@@ -51,12 +51,25 @@ export class PoolsService {
     const activePool = await this.prisma.pool.findFirst({
       where: {
         teslaId: tesla.id,
-        status: { in: [PoolStatus.MATCHED, PoolStatus.DRIVER_ARRIVED] },
+        status: {
+          in: [
+            PoolStatus.MATCHED,
+            PoolStatus.DRIVER_ARRIVED,
+            PoolStatus.STARTED,
+          ],
+        },
       },
+      orderBy: { matchedAt: 'desc' },
       include: {
         rideRequests: {
           where: {
-            status: { in: [RideStatus.MATCHED, RideStatus.DRIVER_ARRIVED] },
+            status: {
+              in: [
+                RideStatus.MATCHED,
+                RideStatus.DRIVER_ARRIVED,
+                RideStatus.STARTED,
+              ],
+            },
           },
           include: {
             pickupZone: true,
@@ -252,8 +265,15 @@ export class PoolsService {
       let pool = await tx.pool.findFirst({
         where: {
           teslaId,
-          status: { in: [PoolStatus.MATCHED, PoolStatus.DRIVER_ARRIVED] },
+          status: {
+            in: [
+              PoolStatus.MATCHED,
+              PoolStatus.DRIVER_ARRIVED,
+              PoolStatus.STARTED,
+            ],
+          },
         },
+        orderBy: { matchedAt: 'desc' },
       });
 
       if (!pool) {
@@ -479,7 +499,15 @@ export class PoolsService {
       include: {
         tesla: true,
         rideRequests: {
-          where: { status: RideStatus.STARTED },
+          where: {
+            status: {
+              in: [
+                RideStatus.STARTED,
+                RideStatus.DRIVER_ARRIVED,
+                RideStatus.MATCHED,
+              ],
+            },
+          },
         },
       },
     });
@@ -534,7 +562,7 @@ export class PoolsService {
         await tx.rideStatusHistory.create({
           data: {
             rideRequestId: req.id,
-            fromStatus: RideStatus.STARTED,
+            fromStatus: req.status,
             toStatus: RideStatus.COMPLETED,
             changedById: driverId,
             note: 'Trip completed and dropoff confirmed',
