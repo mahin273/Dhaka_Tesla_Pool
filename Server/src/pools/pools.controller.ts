@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -44,6 +46,7 @@ export class PoolsController {
   }
 
   @Post(':id/arrive')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.DRIVER)
   async arrive(
@@ -54,6 +57,7 @@ export class PoolsController {
   }
 
   @Post(':id/start')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.DRIVER)
   async startTrip(
@@ -64,6 +68,7 @@ export class PoolsController {
   }
 
   @Post(':id/complete')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.DRIVER)
   async completeTrip(
