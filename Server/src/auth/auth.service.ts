@@ -1,5 +1,6 @@
 import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
@@ -35,6 +36,18 @@ export class AuthService {
         fullName: dto.fullName,
         phone: dto.phone,
         role: dto.role,
+        ...(dto.role === UserRole.DRIVER
+          ? {
+              tesla: {
+                create: {
+                  name: 'Model 3 Fleet',
+                  capacity: 3,
+                  seatsAvailable: 3,
+                  isOnline: false,
+                },
+              },
+            }
+          : {}),
       },
       select: {
         id: true,

@@ -7,7 +7,7 @@ export class TeslasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDriverTesla(driverId: string) {
-    const tesla = await this.prisma.tesla.findUnique({
+    let tesla = await this.prisma.tesla.findUnique({
       where: { driverId },
       include: {
         driver: {
@@ -22,7 +22,25 @@ export class TeslasService {
     });
 
     if (!tesla) {
-      throw new NotFoundException('No Tesla registered for this driver');
+      tesla = await this.prisma.tesla.create({
+        data: {
+          driverId,
+          name: 'Model 3 Fleet',
+          capacity: 3,
+          seatsAvailable: 3,
+          isOnline: false,
+        },
+        include: {
+          driver: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      });
     }
 
     return tesla;
