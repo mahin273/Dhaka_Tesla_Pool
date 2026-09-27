@@ -190,6 +190,28 @@ export class PoolsService {
         }
       }
 
+      let dropoffSequence: string | undefined;
+      if (isAllCompatible && activeRiders.length > 0) {
+        if (activeRiders.length === 1) {
+          const riderName =
+            activeRiders[0].passenger?.fullName || 'Current Rider';
+          const candidateName = req.passenger?.fullName || 'New Rider';
+          dropoffSequence =
+            bestOrder === DropoffOrder.DROP_A_THEN_B
+              ? `Drop ${riderName} then ${candidateName}`
+              : `Drop ${candidateName} then ${riderName}`;
+        } else {
+          const riderNames = activeRiders.map(
+            (r) => r.passenger?.fullName || 'Rider',
+          );
+          const candidateName = req.passenger?.fullName || 'New Rider';
+          dropoffSequence =
+            bestOrder === DropoffOrder.DROP_A_THEN_B
+              ? `Drop ${riderNames.join(', ')} then ${candidateName}`
+              : `Drop ${candidateName} then ${riderNames.join(', ')}`;
+        }
+      }
+
       return {
         rideRequestId: req.id,
         passenger: req.passenger,
@@ -205,6 +227,7 @@ export class PoolsService {
         overlapKm: isAllCompatible ? minOverlap : 0,
         pickupDistanceKm: maxPickupDist,
         bestOrder,
+        dropoffSequence,
         reason: isAllCompatible
           ? `Compatible: corridor aligned with ${maxDetour} km detour and ${minOverlap} km shared overlap`
           : (rejectionReason ?? 'Route detour exceeds limits'),
