@@ -72,7 +72,7 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
             Nearby Passenger Requests
           </h2>
           <p className="text-xs text-slate-400">
-            Real-time pooling matches evaluated against 3.5 km pickup cluster and 2.5 km detour threshold.
+            Corridor-aligned matches evaluated against 1.5 km pickup proximity and 1.3x detour ratio bound.
           </p>
         </div>
 
@@ -158,22 +158,31 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                     {/* Spatial Compatibility Badge */}
                     <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
                       {candidate.compatible ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>
-                            Compatible (+{candidate.detourKm} km detour)
+                        <>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>
+                              Corridor Match (+{candidate.detourKm} km detour)
+                            </span>
                           </span>
-                        </span>
+                          {candidate.overlapKm !== undefined && candidate.overlapKm > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                              <span>{candidate.overlapKm} km Shared Overlap</span>
+                            </span>
+                          )}
+                        </>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
                           <AlertTriangle className="w-3 h-3" />
                           <span>
-                            Detour Alert (+{candidate.detourKm} km)
+                            {candidate.detourKm > 0
+                              ? `Detour Alert (+${candidate.detourKm} km)`
+                              : 'Not Poolable'}
                           </span>
                         </span>
                       )}
 
-                      {candidate.bestOrder && (
+                      {candidate.compatible && candidate.bestOrder && (
                         <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                           Sequence: {candidate.bestOrder.replace(/_/g, ' ')}
                         </span>
@@ -197,13 +206,13 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                     <button
                       type="button"
                       onClick={() => claimMutation.mutate(candidate)}
-                      disabled={isClaiming || claimMutation.isPending || !canFit}
-                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-md ${
+                      disabled={isClaiming || claimMutation.isPending || !canFit || !candidate.compatible}
+                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-md ${
                         !canFit
                           ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          : candidate.compatible
-                          ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/10'
-                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/10'
+                          : !candidate.compatible
+                          ? 'bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed'
+                          : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/10 cursor-pointer'
                       }`}
                     >
                       {isClaiming ? (
@@ -213,6 +222,8 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                         </>
                       ) : !canFit ? (
                         <span>Vehicle Full</span>
+                      ) : !candidate.compatible ? (
+                        <span>Cannot Pool</span>
                       ) : (
                         <>
                           <span>Accept & Claim</span>

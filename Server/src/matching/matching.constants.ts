@@ -1,5 +1,14 @@
 export const EARTH_RADIUS_KM = 6371;
 export const ROAD_FACTOR = 1.6;
-export const PICKUP_CLUSTER_RADIUS_KM = 3.5;
+export const PICKUP_PROXIMITY_KM = 1.5;
+export const PICKUP_CLUSTER_RADIUS_KM = 1.5;
+export const DETOUR_RATIO_CAP = 1.3;
 export const DETOUR_ABS_CAP_KM = 2.5;
 export const DETOUR_PCT_CAP = 0.5;
+
+export const DHAKA_CORRIDORS: Record<string, string[]> = {
+  GULSHAN_AXIS: ['UTTARA', 'BASHUNDHARA', 'BANANI', 'MOHAKHALI', 'GULSHAN_1'],
+  CENTRAL_AXIS: ['UTTARA', 'BANANI', 'MOHAKHALI', 'FARMGATE', 'DHANMONDI'],
+  MIRPUR_AXIS: ['MIRPUR', 'FARMGATE', 'DHANMONDI'],
+  EAST_WEST_AXIS: ['MIRPUR', 'BANANI', 'GULSHAN_1', 'BASHUNDHARA'],
+};

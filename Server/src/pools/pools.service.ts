@@ -74,6 +74,16 @@ export class PoolsService {
 
     const activeRiders = activePool?.rideRequests ?? [];
 
+    if (activePool?.status === PoolStatus.STARTED) {
+      return {
+        teslaId: tesla.id,
+        seatsAvailable: tesla.seatsAvailable,
+        activePoolId: activePool.id,
+        activePassengersCount: activeRiders.length,
+        candidates: [],
+      };
+    }
+
     if (tesla.seatsAvailable <= 0) {
       return {
         teslaId: tesla.id,
@@ -131,11 +141,14 @@ export class PoolsService {
           lat: req.dropoffLat,
           lng: req.dropoffLng,
         },
+        pickupZoneId: req.pickupZoneId,
+        dropoffZoneId: req.dropoffZoneId,
       };
 
       let isAllCompatible = true;
       let maxDetour = 0;
       let maxPickupDist = 0;
+      let minOverlap = Number(req.distanceKm);
       let bestOrder = DropoffOrder.DROP_A_THEN_B;
       let rejectionReason: string | undefined;
 
@@ -149,6 +162,8 @@ export class PoolsService {
             lat: rider.dropoffLat,
             lng: rider.dropoffLng,
           },
+          pickupZoneId: rider.pickupZoneId,
+          dropoffZoneId: rider.dropoffZoneId,
         };
 
         const result = this.matchingService.evaluateCompatibility(
@@ -159,13 +174,17 @@ export class PoolsService {
         if (!result.compatible) {
           isAllCompatible = false;
           rejectionReason = result.reason;
-          maxDetour = result.detourKm ?? 999.0;
+          maxDetour = result.detourKm ?? 0;
           maxPickupDist = Math.max(maxPickupDist, result.pickupDistanceKm);
           break;
         }
 
         maxDetour = Math.max(maxDetour, result.detourKm ?? 0);
         maxPickupDist = Math.max(maxPickupDist, result.pickupDistanceKm);
+        minOverlap = Math.min(
+          minOverlap,
+          result.overlapKm ?? Number(req.distanceKm),
+        );
         if (result.bestOrder) {
           bestOrder = result.bestOrder;
         }
@@ -183,20 +202,24 @@ export class PoolsService {
         distanceKm: Number(req.distanceKm),
         compatible: isAllCompatible,
         detourKm: maxDetour,
+        overlapKm: isAllCompatible ? minOverlap : 0,
         pickupDistanceKm: maxPickupDist,
         bestOrder,
         reason: isAllCompatible
-          ? `Compatible: detour of ${maxDetour} km is within acceptable limits`
+          ? `Compatible: corridor aligned with ${maxDetour} km detour and ${minOverlap} km shared overlap`
           : (rejectionReason ?? 'Route detour exceeds limits'),
       };
     });
 
-    // Sort: compatible candidates first (lowest detour), then incompatible (lowest pickup distance)
+    // Sort: compatible candidates first (lowest detour, highest overlap), then incompatible (lowest pickup distance)
     candidates.sort((a, b) => {
       if (a.compatible && !b.compatible) return -1;
       if (!a.compatible && b.compatible) return 1;
       if (a.compatible && b.compatible) {
-        return a.detourKm - b.detourKm;
+        if (a.detourKm !== b.detourKm) {
+          return a.detourKm - b.detourKm;
+        }
+        return (b.overlapKm ?? 0) - (a.overlapKm ?? 0);
       }
       return a.pickupDistanceKm - b.pickupDistanceKm;
     });
@@ -276,6 +299,12 @@ export class PoolsService {
         orderBy: { matchedAt: 'desc' },
       });
 
+      if (pool && pool.status === PoolStatus.STARTED) {
+        throw new BadRequestException(
+          'Cannot add passengers to a pool that is already in transit (STARTED)',
+        );
+      }
+
       if (!pool) {
         pool = await tx.pool.create({
           data: {
@@ -285,10 +314,60 @@ export class PoolsService {
         });
       }
 
-      // 4. Update ride requests to MATCHED, assign poolId, and apply 20% pool discount
+      // Query existing active riders in this pool
+      const existingRiders = await tx.rideRequest.findMany({
+        where: {
+          poolId: pool.id,
+          status: {
+            in: [RideStatus.MATCHED, RideStatus.DRIVER_ARRIVED],
+          },
+        },
+      });
+
+      // 4. Update ride requests to MATCHED, assign poolId, and apply overlap-based pool discount
       const updatedRequests = [];
       for (const req of requests) {
-        const discountPoysha = Math.round(req.distanceChargePoysha * 0.2);
+        let overlapKm = Number(req.distanceKm);
+
+        if (existingRiders.length > 0) {
+          const candidateLeg = {
+            pickup: { lat: req.pickupLat, lng: req.pickupLng },
+            dropoff: { lat: req.dropoffLat, lng: req.dropoffLng },
+            pickupZoneId: req.pickupZoneId,
+            dropoffZoneId: req.dropoffZoneId,
+          };
+
+          for (const rider of existingRiders) {
+            const riderLeg = {
+              pickup: { lat: rider.pickupLat, lng: rider.pickupLng },
+              dropoff: { lat: rider.dropoffLat, lng: rider.dropoffLng },
+              pickupZoneId: rider.pickupZoneId,
+              dropoffZoneId: rider.dropoffZoneId,
+            };
+
+            const comp = this.matchingService.evaluateCompatibility(
+              riderLeg,
+              candidateLeg,
+            );
+            if (!comp.compatible) {
+              throw new BadRequestException(
+                `Cannot claim ride request ${req.id}: ${comp.reason}`,
+              );
+            }
+            if (comp.overlapKm !== undefined) {
+              overlapKm = Math.min(overlapKm, comp.overlapKm);
+            }
+          }
+        } else if (requests.length > 1) {
+          // If claiming multiple requests simultaneously into an empty pool
+          overlapKm = Number(req.distanceKm);
+        } else {
+          // Single passenger starting a pool has 0 overlap until a pool mate joins
+          overlapKm = 0;
+        }
+
+        const rawDiscount = Math.round(overlapKm * 1800 * 0.2);
+        const discountPoysha = Math.min(rawDiscount, req.distanceChargePoysha);
         const totalFarePoysha =
           req.baseFarePoysha + req.distanceChargePoysha - discountPoysha;
 
@@ -313,6 +392,57 @@ export class PoolsService {
         });
 
         updatedRequests.push(updatedReq);
+      }
+
+      // If new riders joined existing riders, apply overlap discount to existing riders who had 0 discount
+      if (existingRiders.length > 0) {
+        for (const existing of existingRiders) {
+          if (existing.poolDiscountPoysha === 0) {
+            let maxOverlap = 0;
+            const existingLeg = {
+              pickup: { lat: existing.pickupLat, lng: existing.pickupLng },
+              dropoff: { lat: existing.dropoffLat, lng: existing.dropoffLng },
+              pickupZoneId: existing.pickupZoneId,
+              dropoffZoneId: existing.dropoffZoneId,
+            };
+
+            for (const newReq of requests) {
+              const newLeg = {
+                pickup: { lat: newReq.pickupLat, lng: newReq.pickupLng },
+                dropoff: { lat: newReq.dropoffLat, lng: newReq.dropoffLng },
+                pickupZoneId: newReq.pickupZoneId,
+                dropoffZoneId: newReq.dropoffZoneId,
+              };
+
+              const comp = this.matchingService.evaluateCompatibility(
+                existingLeg,
+                newLeg,
+              );
+              if (comp.overlapKm) {
+                maxOverlap = Math.max(maxOverlap, comp.overlapKm);
+              }
+            }
+
+            if (maxOverlap > 0) {
+              const existingDiscount = Math.min(
+                Math.round(maxOverlap * 1800 * 0.2),
+                existing.distanceChargePoysha,
+              );
+              const existingTotal =
+                existing.baseFarePoysha +
+                existing.distanceChargePoysha -
+                existingDiscount;
+
+              await tx.rideRequest.update({
+                where: { id: existing.id },
+                data: {
+                  poolDiscountPoysha: existingDiscount,
+                  totalFarePoysha: existingTotal,
+                },
+              });
+            }
+          }
+        }
       }
 
       const updatedTesla = await tx.tesla.findUnique({

@@ -8,16 +8,32 @@ import { FareBreakdown } from './interfaces/fare-breakdown.interface';
 
 @Injectable()
 export class FaresService {
-  calculateFare(distanceKm: number, isPooled = false): FareBreakdown {
+  calculateFare(
+    distanceKm: number,
+    isPooled = false,
+    overlapKm?: number,
+  ): FareBreakdown {
     if (distanceKm < 0) {
       throw new BadRequestException('Distance must be non-negative');
     }
 
     const baseFarePoysha = BASE_FARE_POYSHA;
     const distanceChargePoysha = Math.round(distanceKm * PER_KM_RATE_POYSHA);
-    const poolDiscountPoysha = isPooled
-      ? Math.round(distanceChargePoysha * POOL_DISCOUNT_PERCENT)
-      : 0;
+
+    let poolDiscountPoysha = 0;
+    if (isPooled) {
+      if (overlapKm !== undefined) {
+        const rawDiscount = Math.round(
+          Math.max(0, overlapKm) * PER_KM_RATE_POYSHA * POOL_DISCOUNT_PERCENT,
+        );
+        poolDiscountPoysha = Math.min(rawDiscount, distanceChargePoysha);
+      } else {
+        poolDiscountPoysha = Math.round(
+          distanceChargePoysha * POOL_DISCOUNT_PERCENT,
+        );
+      }
+    }
+
     const totalFarePoysha =
       baseFarePoysha + distanceChargePoysha - poolDiscountPoysha;
 
