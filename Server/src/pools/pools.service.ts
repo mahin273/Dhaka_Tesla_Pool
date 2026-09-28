@@ -126,7 +126,6 @@ export class PoolsService {
           compatible: true,
           detourKm: 0,
           pickupDistanceKm: 0,
-          bestOrder: DropoffOrder.DROP_A_THEN_B,
           reason: 'Car is currently empty; candidate can initiate new pool',
         };
       }

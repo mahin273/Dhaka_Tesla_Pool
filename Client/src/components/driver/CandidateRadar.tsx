@@ -182,9 +182,9 @@ export const CandidateRadar: React.FC<CandidateRadarProps> = ({
                         </span>
                       )}
 
-                      {candidate.compatible && (candidate.dropoffSequence || candidate.bestOrder) && (
+                      {candidate.compatible && candidate.dropoffSequence && (
                         <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                          Sequence: {candidate.dropoffSequence || candidate.bestOrder?.replace(/_/g, ' ')}
+                          Sequence: {candidate.dropoffSequence}
                         </span>
                       )}
 
