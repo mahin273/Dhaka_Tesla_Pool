@@ -2,6 +2,8 @@
 
 Share a seat. Split the fare. Survive Dhaka traffic.
 
+**Live Application**: [https://dhaka-tesla-pool-delta.vercel.app](https://dhaka-tesla-pool-delta.vercel.app) | **API Base**: [https://dhaka-tesla-pool-mahin.onrender.com](https://dhaka-tesla-pool-mahin.onrender.com)
+
 ---
 
 ## 1. Summary
@@ -389,11 +391,12 @@ The database seed script (`Server/prisma/seed.ts`) pre-populates all Dhaka trans
 
 ---
 
-## 11. Deployment URL & API Overview
+## 11. Deployment URLs & API Overview
 
-### Deployment URL
+### Deployment URLs
+- **Web Application (Vercel)**: [https://dhaka-tesla-pool-delta.vercel.app](https://dhaka-tesla-pool-delta.vercel.app)
+- **Backend API (Render)**: [https://dhaka-tesla-pool-mahin.onrender.com](https://dhaka-tesla-pool-mahin.onrender.com)
 - **Local Development / Docker Staging**: `http://localhost:5174` (Client), `http://localhost:4000` (API)
-- **Production Staging**: `https://dhaka-tesla-pool.internal` *(or designated hosting provider)*
 
 ### API Endpoint Overview
 
