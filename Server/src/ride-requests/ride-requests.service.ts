@@ -104,8 +104,30 @@ export class RideRequestsService {
     };
   }
 
+  async getDriverRating(driverId: string): Promise<number> {
+    const ratings = await this.prisma.rating.findMany({
+      where: {
+        rideRequest: {
+          pool: {
+            tesla: {
+              driverId,
+            },
+          },
+        },
+      },
+      select: { stars: true },
+    });
+
+    if (ratings.length === 0) {
+      return 4.9;
+    }
+
+    const sum = ratings.reduce((acc, r) => acc + r.stars, 0);
+    return Number((sum / ratings.length).toFixed(1));
+  }
+
   async findAllForPassenger(passengerId: string) {
-    return this.prisma.rideRequest.findMany({
+    const requests = await this.prisma.rideRequest.findMany({
       where: { passengerId },
       orderBy: { requestedAt: 'desc' },
       include: {
@@ -130,6 +152,26 @@ export class RideRequestsService {
         },
       },
     });
+
+    return Promise.all(
+      requests.map(async (req) => {
+        if (!req.pool || !req.pool.tesla || !req.pool.tesla.driver) return req;
+        const rating = await this.getDriverRating(req.pool.tesla.driver.id);
+        return {
+          ...req,
+          pool: {
+            ...req.pool,
+            tesla: {
+              ...req.pool.tesla,
+              driver: {
+                ...req.pool.tesla.driver,
+                rating,
+              },
+            },
+          },
+        };
+      }),
+    );
   }
 
   async findById(user: { id: string; role?: UserRole }, id: string) {
@@ -142,7 +184,17 @@ export class RideRequestsService {
         rating: true,
         pool: {
           include: {
-            tesla: true,
+            tesla: {
+              include: {
+                driver: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    phone: true,
+                  },
+                },
+              },
+            },
           },
         },
         statusHistory: {
@@ -162,6 +214,23 @@ export class RideRequestsService {
       throw new ForbiddenException(
         'You do not have access to this ride request',
       );
+    }
+
+    if (request.pool?.tesla?.driver) {
+      const rating = await this.getDriverRating(request.pool.tesla.driver.id);
+      return {
+        ...request,
+        pool: {
+          ...request.pool,
+          tesla: {
+            ...request.pool.tesla,
+            driver: {
+              ...request.pool.tesla.driver,
+              rating,
+            },
+          },
+        },
+      };
     }
 
     return request;

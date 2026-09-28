@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
+  Star,
 } from 'lucide-react';
 
 interface RideTrackerProps {
@@ -52,6 +53,16 @@ const STEPS: StepConfig[] = [
 export const RideTracker: React.FC<RideTrackerProps> = ({ ride, onCancelled }) => {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+
+  const driver = ride.pool?.tesla?.driver;
+  const driverName = driver?.fullName
+    ? driver.fullName.startsWith('Captain')
+      ? driver.fullName
+      : `Captain ${driver.fullName}`
+    : 'Captain Jashim Uddin';
+  const driverPhone = driver?.phone || '+8801710000001';
+  const driverRating = driver?.rating ?? 4.9;
+  const vehicleName = ride.pool?.tesla?.name || 'Bullet';
 
   const currentStepIndex = STEPS.findIndex((s) => s.status === ride.status);
   const canCancel =
@@ -176,12 +187,24 @@ export const RideTracker: React.FC<RideTrackerProps> = ({ ride, onCancelled }) =
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
               <div className="text-slate-400">Driver</div>
-              <div className="font-semibold text-slate-100">Captain Jashim Uddin</div>
-              <div className="text-[11px] text-slate-500 font-mono">+8801710000001</div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-semibold text-slate-100">
+                  {driverName}
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-[11px] font-bold">
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                  <span>{driverRating.toFixed(1)}</span>
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500 font-mono">
+                {driverPhone}
+              </div>
             </div>
             <div>
               <div className="text-slate-400">Vehicle</div>
-              <div className="font-semibold text-slate-100">&quot;Bullet&quot;</div>
+              <div className="font-semibold text-slate-100">
+                &quot;{vehicleName}&quot;
+              </div>
               <div className="text-[11px] text-emerald-400">EV Fleet Priority</div>
             </div>
           </div>

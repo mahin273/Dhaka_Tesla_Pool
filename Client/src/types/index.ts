@@ -61,6 +61,7 @@ export interface RideRequest {
     phone: string;
   };
   poolId?: string | null;
+  pool?: Pool | null;
   pickupZoneId: string;
   pickupZone?: Zone;
   pickupLat: number;
@@ -95,7 +96,7 @@ export interface Rating {
 export interface Pool {
   id: string;
   teslaId: string;
-  tesla?: Tesla & { driver?: { id: string; fullName: string; phone: string } };
+  tesla?: Tesla & { driver?: { id: string; fullName: string; phone: string; rating?: number } };
   status: PoolStatus;
   matchedAt: string;
   driverArrivedAt?: string | null;
