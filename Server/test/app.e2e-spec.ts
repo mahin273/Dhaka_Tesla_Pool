@@ -614,4 +614,150 @@ describe('Dhaka Tesla Pool Backend (E2E Integration)', () => {
       );
     });
   });
+
+  describe('6. Dynamic En-Route In-Flight Matching', () => {
+    it('should discover and onboard downstream en-route passengers into a STARTED pool', async () => {
+      // 1. Nusrat requests a ride from UTTARA to MOHAKHALI (Central Axis, Southbound)
+      const nusratRes = await request(app.getHttpServer())
+        .post('/ride-requests')
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          pickupZoneId: 'UTTARA',
+          pickupLat: 23.8683,
+          pickupLng: 90.3850,
+          dropoffZoneId: 'MOHAKHALI',
+          dropoffLat: 23.7784,
+          dropoffLng: 90.4034,
+          seatsRequested: 1,
+        })
+        .expect(201);
+      const nusratRideId = nusratRes.body.id;
+
+      // 2. Bullet is staged in UTTARA and claims Nusrat
+      await request(app.getHttpServer())
+        .patch('/drivers/me/location')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ zoneId: 'UTTARA' })
+        .expect(200);
+
+      const claimRes = await request(app.getHttpServer())
+        .post('/pools/claim')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({
+          teslaId: bulletId,
+          rideRequestIds: [nusratRideId],
+          seatsNeeded: 1,
+        })
+        .expect(201);
+      const poolId = claimRes.body.poolId;
+
+      // Advance pool to STARTED
+      await request(app.getHttpServer())
+        .post(`/pools/${poolId}/arrive`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(`/pools/${poolId}/start`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .expect(200);
+
+      // Verify pool is in STARTED status with 2 seats remaining
+      const teslaInFlight = await prisma.tesla.findUnique({ where: { id: bulletId } });
+      expect(teslaInFlight?.seatsAvailable).toBe(2);
+
+      // 3. While in flight, Rafiq requests ride downstream: BANANI to FARMGATE (Central Axis, Southbound)
+      const rafiqRes = await request(app.getHttpServer())
+        .post('/ride-requests')
+        .set('Authorization', `Bearer ${rafiqToken}`)
+        .send({
+          pickupZoneId: 'BANANI',
+          pickupLat: 23.7937,
+          pickupLng: 90.4066,
+          dropoffZoneId: 'FARMGATE',
+          dropoffLat: 23.7581,
+          dropoffLng: 90.3897,
+          seatsRequested: 1,
+        })
+        .expect(201);
+      const rafiqRideId = rafiqRes.body.id;
+
+      // Shirin requests opposing direction: FARMGATE to UTTARA (Northbound)
+      const shirinRes = await request(app.getHttpServer())
+        .post('/ride-requests')
+        .set('Authorization', `Bearer ${shirinToken}`)
+        .send({
+          pickupZoneId: 'FARMGATE',
+          pickupLat: 23.7581,
+          pickupLng: 90.3897,
+          dropoffZoneId: 'UTTARA',
+          dropoffLat: 23.8683,
+          dropoffLng: 90.3850,
+          seatsRequested: 1,
+        })
+        .expect(201);
+      const shirinRideId = shirinRes.body.id;
+
+      // 4. Driver checks candidate radar while in STARTED status
+      const candidatesRes = await request(app.getHttpServer())
+        .get('/pools/candidates')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .expect(200);
+
+      expect(candidatesRes.body.candidates.length).toBeGreaterThanOrEqual(2);
+      const rafiqCand = candidatesRes.body.candidates.find((c: any) => c.rideRequestId === rafiqRideId);
+      const shirinCand = candidatesRes.body.candidates.find((c: any) => c.rideRequestId === shirinRideId);
+
+      expect(rafiqCand).toBeDefined();
+      expect(rafiqCand.compatible).toBe(true);
+      expect(rafiqCand.reason).toContain('Compatible: corridor aligned');
+
+      expect(shirinCand).toBeDefined();
+      expect(shirinCand.compatible).toBe(false);
+      expect(shirinCand.reason).toContain('Pickups exceed proximity threshold');
+
+      // 5. Driver claims Rafiq en-route into the ongoing STARTED pool
+      const enRouteClaimRes = await request(app.getHttpServer())
+        .post('/pools/claim')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({
+          teslaId: bulletId,
+          rideRequestIds: [rafiqRideId],
+          seatsNeeded: 1,
+        })
+        .expect(201);
+
+      expect(enRouteClaimRes.body.poolId).toBe(poolId);
+      expect(enRouteClaimRes.body.status).toBe(PoolStatus.STARTED);
+
+      // Verify Rafiq is directly in STARTED status and linked to pool
+      const rafiqInDb = await prisma.rideRequest.findUnique({ where: { id: rafiqRideId } });
+      expect(rafiqInDb?.poolId).toBe(poolId);
+      expect(rafiqInDb?.status).toBe(RideStatus.STARTED);
+      expect(rafiqInDb?.poolDiscountPoysha).toBeGreaterThan(0);
+
+      // Verify Nusrat received retroactive overlap discount
+      const nusratInDb = await prisma.rideRequest.findUnique({ where: { id: nusratRideId } });
+      expect(nusratInDb?.poolDiscountPoysha).toBeGreaterThan(0);
+
+      // Seats decremented from 2 to 1
+      const teslaAfterEnRoute = await prisma.tesla.findUnique({ where: { id: bulletId } });
+      expect(teslaAfterEnRoute?.seatsAvailable).toBe(1);
+
+      // 6. Complete pool: both riders complete and payments generated
+      await request(app.getHttpServer())
+        .post(`/pools/${poolId}/complete`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .expect(200);
+
+      const nusratAfterComplete = await prisma.rideRequest.findUnique({ where: { id: nusratRideId } });
+      const rafiqAfterComplete = await prisma.rideRequest.findUnique({ where: { id: rafiqRideId } });
+      expect(nusratAfterComplete?.status).toBe(RideStatus.COMPLETED);
+      expect(rafiqAfterComplete?.status).toBe(RideStatus.COMPLETED);
+
+      // Vehicle capacity fully restored to 3
+      const teslaFinal = await prisma.tesla.findUnique({ where: { id: bulletId } });
+      expect(teslaFinal?.seatsAvailable).toBe(3);
+    });
+  });
 });

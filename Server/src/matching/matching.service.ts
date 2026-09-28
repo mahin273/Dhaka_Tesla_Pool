@@ -40,7 +40,7 @@ export class MatchingService {
   }
 
   evaluateCompatibility(legA: RouteLeg, legB: RouteLeg): CompatibilityResult {
-    // 1. Pickup Proximity Check (<= 1.5 km or identical pickup zone)
+    // 1. Pickup Proximity Check (<= 1.5 km, identical pickup zone, or downstream en-route pickup on shared corridor)
     const pickupDist =
       Math.round(this.haversineKm(legA.pickup, legB.pickup) * 10) / 10;
     const samePickupZone = Boolean(
@@ -49,7 +49,48 @@ export class MatchingService {
         legA.pickupZoneId === legB.pickupZoneId,
     );
 
-    if (pickupDist > PICKUP_PROXIMITY_KM && !samePickupZone) {
+    // Check if legB pickup is situated downstream along a shared corridor of legA
+    let isDownstreamPickup = false;
+    if (
+      legA.pickupZoneId &&
+      legA.dropoffZoneId &&
+      legB.pickupZoneId &&
+      legB.dropoffZoneId
+    ) {
+      for (const [_, corridor] of Object.entries(DHAKA_CORRIDORS)) {
+        const idxA_pick = corridor.indexOf(legA.pickupZoneId);
+        const idxA_drop = corridor.indexOf(legA.dropoffZoneId);
+        const idxB_pick = corridor.indexOf(legB.pickupZoneId);
+        const idxB_drop = corridor.indexOf(legB.dropoffZoneId);
+
+        if (
+          idxA_pick !== -1 &&
+          idxA_drop !== -1 &&
+          idxB_pick !== -1 &&
+          idxB_drop !== -1
+        ) {
+          const dirA = idxA_drop - idxA_pick;
+          const dirB = idxB_drop - idxB_pick;
+
+          // Both traveling in the same direction along this corridor
+          if ((dirA > 0 && dirB > 0) || (dirA < 0 && dirB < 0)) {
+            if (dirA > 0 && idxA_pick <= idxB_pick && idxB_pick <= idxA_drop) {
+              isDownstreamPickup = true;
+              break;
+            } else if (
+              dirA < 0 &&
+              idxA_pick >= idxB_pick &&
+              idxB_pick >= idxA_drop
+            ) {
+              isDownstreamPickup = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (pickupDist > PICKUP_PROXIMITY_KM && !samePickupZone && !isDownstreamPickup) {
       return {
         compatible: false,
         pickupDistanceKm: pickupDist,
