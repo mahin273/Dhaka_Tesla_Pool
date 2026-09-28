@@ -432,7 +432,7 @@ The matching and pricing engines calculate travel distances using two complement
 
 1. **Great-Circle Haversine Formula**:
    $$\text{distance} = 2 R \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta \text{lat}}{2}\right) + \cos(\text{lat}_1)\cos(\text{lat}_2)\sin^2\left(\frac{\Delta \text{lng}}{2}\right)}\right)$$
-   *(where $R = 6371\text{ km}$, Earth's mean radius)*
+   *(where R = 6371 km, Earth's mean radius)*
 
 2. **Dhaka Urban Winding Road Multiplier**:
    $$\text{roadDistanceKm} = \text{round}(\text{haversineDistanceKm} \times 1.6 \times 10) / 10$$
