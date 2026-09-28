@@ -53,6 +53,7 @@ model User {
   tesla             Tesla?
   rideRequests      RideRequest[]
   statusChangesMade RideStatusHistory[] @relation("ChangedBy")
+  ratings           Rating[]            @relation("UserRatings")
 
   @@map("users")
 }
@@ -137,6 +138,7 @@ model RideRequest {
 
   statusHistory        RideStatusHistory[]
   payment              Payment?
+  rating               Rating?
 
   @@index([passengerId])
   @@index([poolId])
@@ -169,4 +171,18 @@ model Payment {
   paidAt        DateTime?     @map("paid_at")
 
   @@map("payments")
+}
+
+model Rating {
+  id            String      @id @default(uuid())
+  rideRequestId String      @unique @map("ride_request_id")
+  rideRequest   RideRequest @relation(fields: [rideRequestId], references: [id], onDelete: Cascade)
+  userId        String      @map("user_id")
+  user          User        @relation("UserRatings", fields: [userId], references: [id], onDelete: Cascade)
+  stars         Int
+  tags          String[]    @default([])
+  comment       String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@map("ratings")
 }

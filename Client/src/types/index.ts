@@ -61,6 +61,7 @@ export interface RideRequest {
     phone: string;
   };
   poolId?: string | null;
+  pool?: Pool | null;
   pickupZoneId: string;
   pickupZone?: Zone;
   pickupLat: number;
@@ -78,12 +79,24 @@ export interface RideRequest {
   totalFarePoysha: number;
   requestedAt: string;
   cancelledAt?: string | null;
+  payment?: Payment | null;
+  rating?: Rating | null;
+}
+
+export interface Rating {
+  id: string;
+  rideRequestId: string;
+  userId: string;
+  stars: number;
+  tags: string[];
+  comment?: string | null;
+  createdAt: string;
 }
 
 export interface Pool {
   id: string;
   teslaId: string;
-  tesla?: Tesla & { driver?: { id: string; fullName: string; phone: string } };
+  tesla?: Tesla & { driver?: { id: string; fullName: string; phone: string; rating?: number } };
   status: PoolStatus;
   matchedAt: string;
   driverArrivedAt?: string | null;

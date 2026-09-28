@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
 import { FaresService } from '../fares/fares.service';
 import { CreateRideRequestDto } from './dto/create-ride-request.dto';
+import { CreateRatingDto } from './dto/create-rating.dto';
 
 @Injectable()
 export class RideRequestsService {
@@ -103,13 +104,37 @@ export class RideRequestsService {
     };
   }
 
+  async getDriverRating(driverId: string): Promise<number> {
+    const ratings = await this.prisma.rating.findMany({
+      where: {
+        rideRequest: {
+          pool: {
+            tesla: {
+              driverId,
+            },
+          },
+        },
+      },
+      select: { stars: true },
+    });
+
+    if (ratings.length === 0) {
+      return 4.9;
+    }
+
+    const sum = ratings.reduce((acc, r) => acc + r.stars, 0);
+    return Number((sum / ratings.length).toFixed(1));
+  }
+
   async findAllForPassenger(passengerId: string) {
-    return this.prisma.rideRequest.findMany({
+    const requests = await this.prisma.rideRequest.findMany({
       where: { passengerId },
       orderBy: { requestedAt: 'desc' },
       include: {
         pickupZone: true,
         dropoffZone: true,
+        payment: true,
+        rating: true,
         pool: {
           include: {
             tesla: {
@@ -127,6 +152,26 @@ export class RideRequestsService {
         },
       },
     });
+
+    return Promise.all(
+      requests.map(async (req) => {
+        if (!req.pool || !req.pool.tesla || !req.pool.tesla.driver) return req;
+        const rating = await this.getDriverRating(req.pool.tesla.driver.id);
+        return {
+          ...req,
+          pool: {
+            ...req.pool,
+            tesla: {
+              ...req.pool.tesla,
+              driver: {
+                ...req.pool.tesla.driver,
+                rating,
+              },
+            },
+          },
+        };
+      }),
+    );
   }
 
   async findById(user: { id: string; role?: UserRole }, id: string) {
@@ -135,9 +180,21 @@ export class RideRequestsService {
       include: {
         pickupZone: true,
         dropoffZone: true,
+        payment: true,
+        rating: true,
         pool: {
           include: {
-            tesla: true,
+            tesla: {
+              include: {
+                driver: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    phone: true,
+                  },
+                },
+              },
+            },
           },
         },
         statusHistory: {
@@ -157,6 +214,23 @@ export class RideRequestsService {
       throw new ForbiddenException(
         'You do not have access to this ride request',
       );
+    }
+
+    if (request.pool?.tesla?.driver) {
+      const rating = await this.getDriverRating(request.pool.tesla.driver.id);
+      return {
+        ...request,
+        pool: {
+          ...request.pool,
+          tesla: {
+            ...request.pool.tesla,
+            driver: {
+              ...request.pool.tesla.driver,
+              rating,
+            },
+          },
+        },
+      };
     }
 
     return request;
@@ -224,5 +298,61 @@ export class RideRequestsService {
 
       return updated;
     });
+  }
+
+  async createRating(
+    user: { id: string; role?: UserRole },
+    id: string,
+    dto: CreateRatingDto,
+  ) {
+    const request = await this.prisma.rideRequest.findUnique({
+      where: { id },
+      include: {
+        pool: {
+          include: {
+            tesla: true,
+          },
+        },
+        rating: true,
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Ride request not found');
+    }
+
+    const isPassengerOwner = request.passengerId === user.id;
+    const isAssignedDriver = request.pool?.tesla?.driverId === user.id;
+
+    if (!isPassengerOwner && !isAssignedDriver) {
+      throw new ForbiddenException(
+        'You do not have permission to rate this ride request',
+      );
+    }
+
+    if (request.status !== RideStatus.COMPLETED) {
+      throw new BadRequestException('Can only rate completed rides');
+    }
+
+    if (request.rating) {
+      throw new BadRequestException('Ride has already been rated');
+    }
+
+    try {
+      return await this.prisma.rating.create({
+        data: {
+          rideRequestId: id,
+          userId: user.id,
+          stars: dto.stars,
+          tags: dto.tags ?? [],
+          comment: dto.comment,
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new BadRequestException('Ride has already been rated');
+      }
+      throw err;
+    }
   }
 }

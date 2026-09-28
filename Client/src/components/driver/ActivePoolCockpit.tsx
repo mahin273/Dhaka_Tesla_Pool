@@ -18,6 +18,7 @@ import {
 interface ActivePoolCockpitProps {
   pool: Pool;
   onLifecycleAdvanced?: () => void;
+  onTripCompleted?: (completedPool: Pool) => void;
 }
 
 interface ActionConfig {
@@ -30,6 +31,7 @@ interface ActionConfig {
 export const ActivePoolCockpit: React.FC<ActivePoolCockpitProps> = ({
   pool,
   onLifecycleAdvanced,
+  onTripCompleted,
 }) => {
   const queryClient = useQueryClient();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -72,10 +74,13 @@ export const ActivePoolCockpit: React.FC<ActivePoolCockpitProps> = ({
       setErrorMessage(null);
       return apiClient.post(endpoint);
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['activePool'] });
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
       queryClient.invalidateQueries({ queryKey: ['myTesla'] });
+      if (currentAction?.endpoint.endsWith('/complete')) {
+        onTripCompleted?.(data || pool);
+      }
       onLifecycleAdvanced?.();
     },
     onError: (err: any) => {

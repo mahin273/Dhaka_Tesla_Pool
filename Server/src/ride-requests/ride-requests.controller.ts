@@ -11,6 +11,7 @@ import {
 import { UserRole } from '@prisma/client';
 import { RideRequestsService } from './ride-requests.service';
 import { CreateRideRequestDto } from './dto/create-ride-request.dto';
+import { CreateRatingDto } from './dto/create-rating.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { RideOwnershipGuard } from '../common/guards/ride-ownership.guard';
@@ -46,6 +47,17 @@ export class RideRequestsController {
     @Param('id') id: string,
   ) {
     return this.rideRequestsService.findById(user, id);
+  }
+
+  @Post(':id/rate')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(RideOwnershipGuard)
+  async rate(
+    @CurrentUser() user: { id: string; role?: UserRole },
+    @Param('id') id: string,
+    @Body() dto: CreateRatingDto,
+  ) {
+    return this.rideRequestsService.createRating(user, id, dto);
   }
 
   @Post(':id/cancel')
