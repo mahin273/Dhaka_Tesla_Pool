@@ -11,6 +11,7 @@ export class TeslasService {
     let tesla = await this.prisma.tesla.findUnique({
       where: { driverId },
       include: {
+        currentZone: true,
         driver: {
           select: {
             id: true,
@@ -30,8 +31,10 @@ export class TeslasService {
           capacity: 3,
           seatsAvailable: 3,
           isOnline: false,
+          currentZoneId: 'BANANI',
         },
         include: {
+          currentZone: true,
           driver: {
             select: {
               id: true,
@@ -61,6 +64,10 @@ export class TeslasService {
         capacity: dto.capacity,
         seatsAvailable: dto.capacity,
         isOnline: false,
+        currentZoneId: 'BANANI',
+      },
+      include: {
+        currentZone: true,
       },
     });
   }
@@ -94,6 +101,58 @@ export class TeslasService {
     return this.prisma.tesla.update({
       where: { driverId },
       data: { isOnline },
+      include: {
+        currentZone: true,
+      },
+    });
+  }
+
+  async updateLocation(driverId: string, zoneId: string) {
+    const existing = await this.prisma.tesla.findUnique({
+      where: { driverId },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Driver must register a Tesla before updating location');
+    }
+
+    const zone = await this.prisma.zone.findUnique({
+      where: { id: zoneId },
+    });
+
+    if (!zone) {
+      throw new NotFoundException(`Zone ${zoneId} not found`);
+    }
+
+    const activePool = await this.prisma.pool.findFirst({
+      where: {
+        teslaId: existing.id,
+        status: {
+          in: [PoolStatus.MATCHED, PoolStatus.DRIVER_ARRIVED, PoolStatus.STARTED],
+        },
+      },
+    });
+
+    if (activePool) {
+      throw new BadRequestException(
+        'Cannot change staging area during an active trip. Please complete the trip first.',
+      );
+    }
+
+    return this.prisma.tesla.update({
+      where: { driverId },
+      data: { currentZoneId: zoneId },
+      include: {
+        currentZone: true,
+        driver: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
     });
   }
 }

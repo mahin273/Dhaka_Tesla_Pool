@@ -65,6 +65,8 @@ model Tesla {
   capacity       Int
   seatsAvailable Int      @map("seats_available")
   isOnline       Boolean  @default(false) @map("is_online")
+  currentZoneId  String?  @map("current_zone_id")
+  currentZone    Zone?    @relation("TeslaCurrentZone", fields: [currentZoneId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -81,6 +83,7 @@ model Zone {
 
   pickups   RideRequest[] @relation("PickupZone")
   dropoffs  RideRequest[] @relation("DropoffZone")
+  teslas    Tesla[]       @relation("TeslaCurrentZone")
 
   @@map("zones")
 }

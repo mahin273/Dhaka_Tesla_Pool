@@ -70,6 +70,7 @@ async function main() {
       capacity: 3,
       seatsAvailable: 3,
       isOnline: false,
+      currentZoneId: 'BANANI',
     },
     create: {
       driverId: jashim.id,
@@ -77,6 +78,7 @@ async function main() {
       capacity: 3,
       seatsAvailable: 3,
       isOnline: false,
+      currentZoneId: 'BANANI',
     },
   });
 

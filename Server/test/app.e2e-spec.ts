@@ -109,7 +109,7 @@ describe('Dhaka Tesla Pool Backend (E2E Integration)', () => {
 
     await prisma.tesla.update({
       where: { id: bulletId },
-      data: { seatsAvailable: 3, isOnline: true },
+      data: { seatsAvailable: 3, isOnline: true, currentZoneId: 'BANANI' },
     });
   });
 
@@ -481,6 +481,137 @@ describe('Dhaka Tesla Pool Backend (E2E Integration)', () => {
       expect(nusratPayment?.status).toBe(PaymentStatus.PENDING);
       expect(rafiqPayment).not.toBeNull();
       expect(rafiqPayment?.status).toBe(PaymentStatus.PENDING);
+    });
+  });
+
+  describe('5. Driver Staging Area & Zone-Based Dispatching', () => {
+    it('should update staging area and reject invalid zones or unauthorized roles', async () => {
+      // 1. Unauthorized passenger attempt
+      const passengerRes = await request(app.getHttpServer())
+        .patch('/drivers/me/location')
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({ zoneId: 'DHANMONDI' })
+        .expect(403);
+      expect(passengerRes.body.message).toContain('Requires one of the following roles: DRIVER');
+
+      // 2. Driver invalid zone attempt
+      const invalidZoneRes = await request(app.getHttpServer())
+        .patch('/drivers/me/location')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ zoneId: 'NON_EXISTENT_ZONE' })
+        .expect(404);
+      expect(invalidZoneRes.body.message).toContain('Zone NON_EXISTENT_ZONE not found');
+
+      // 3. Driver valid update to UTTARA
+      const updateRes = await request(app.getHttpServer())
+        .patch('/drivers/me/location')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ zoneId: 'UTTARA' })
+        .expect(200);
+      expect(updateRes.body.currentZoneId).toBe('UTTARA');
+      expect(updateRes.body.currentZone.name).toBe('Uttara');
+
+      // Verify DB persistence
+      const vehicle = await prisma.tesla.findUnique({ where: { id: bulletId } });
+      expect(vehicle?.currentZoneId).toBe('UTTARA');
+    });
+
+    it('should filter candidate requests on empty-car radar based on dispatch proximity to staging zone', async () => {
+      // Staging driver at UTTARA
+      await request(app.getHttpServer())
+        .patch('/drivers/me/location')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ zoneId: 'UTTARA' })
+        .expect(200);
+
+      // Ride 1: Pickup in UTTARA (close to staging)
+      const uttaraRideRes = await request(app.getHttpServer())
+        .post('/ride-requests')
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          pickupZoneId: 'UTTARA',
+          pickupLat: 23.8683,
+          pickupLng: 90.3850,
+          dropoffZoneId: 'BANANI',
+          dropoffLat: 23.7937,
+          dropoffLng: 90.4066,
+          seatsRequested: 1,
+        })
+        .expect(201);
+
+      // Ride 2: Pickup in DHANMONDI (far from UTTARA > 10 km)
+      const dhanmondiRideRes = await request(app.getHttpServer())
+        .post('/ride-requests')
+        .set('Authorization', `Bearer ${rafiqToken}`)
+        .send({
+          pickupZoneId: 'DHANMONDI',
+          pickupLat: 23.7450,
+          pickupLng: 90.3767,
+          dropoffZoneId: 'FARMGATE',
+          dropoffLat: 23.7581,
+          dropoffLng: 90.3897,
+          seatsRequested: 1,
+        })
+        .expect(201);
+
+      // Fetch candidates
+      const candidatesRes = await request(app.getHttpServer())
+        .get('/pools/candidates')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .expect(200);
+
+      const uttaraCand = candidatesRes.body.candidates.find(
+        (c: any) => c.rideRequestId === uttaraRideRes.body.id,
+      );
+      const dhanmondiCand = candidatesRes.body.candidates.find(
+        (c: any) => c.rideRequestId === dhanmondiRideRes.body.id,
+      );
+
+      expect(uttaraCand).toBeDefined();
+      expect(uttaraCand.compatible).toBe(true);
+      expect(uttaraCand.reason).toContain('Within dispatch range');
+
+      expect(dhanmondiCand).toBeDefined();
+      expect(dhanmondiCand.compatible).toBe(false);
+      expect(dhanmondiCand.reason).toContain('exceeds 2.5 km limit');
+    });
+
+    it('should reject changing staging area while an active trip is in progress', async () => {
+      // Driver creates a pool
+      const rideRes = await request(app.getHttpServer())
+        .post('/ride-requests')
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          pickupZoneId: 'BANANI',
+          pickupLat: 23.7904,
+          pickupLng: 90.4078,
+          dropoffZoneId: 'GULSHAN_1',
+          dropoffLat: 23.7806,
+          dropoffLng: 90.4163,
+          seatsRequested: 1,
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/pools/claim')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({
+          teslaId: bulletId,
+          rideRequestIds: [rideRes.body.id],
+          seatsNeeded: 1,
+        })
+        .expect(201);
+
+      // Attempt to change staging area while trip is MATCHED
+      const errorRes = await request(app.getHttpServer())
+        .patch('/drivers/me/location')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ zoneId: 'DHANMONDI' })
+        .expect(400);
+
+      expect(errorRes.body.message).toContain(
+        'Cannot change staging area during an active trip. Please complete the trip first.',
+      );
     });
   });
 });

@@ -3,6 +3,7 @@ import { UserRole } from '@prisma/client';
 import { TeslasService } from './teslas.service';
 import { RegisterTeslaDto } from './dto/register-tesla.dto';
 import { UpdateOnlineStatusDto } from './dto/update-online-status.dto';
+import { UpdateDriverLocationDto } from './dto/update-location.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -33,5 +34,13 @@ export class TeslasController {
     @Body() dto: UpdateOnlineStatusDto,
   ) {
     return this.teslasService.setOnlineStatus(user.id, dto.isOnline);
+  }
+
+  @Patch('location')
+  async updateLocation(
+    @CurrentUser() user: { id: string },
+    @Body() dto: UpdateDriverLocationDto,
+  ) {
+    return this.teslasService.updateLocation(user.id, dto.zoneId);
   }
 }
