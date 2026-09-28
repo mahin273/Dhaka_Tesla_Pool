@@ -88,6 +88,7 @@ export const PassengerPage: React.FC = () => {
           <TripReceipt
             ride={completedRide}
             onBookAgain={() => handleDismissReceipt(completedRide.id)}
+            onRatingSubmitted={() => refetch()}
           />
         ) : (
           <BookingSheet

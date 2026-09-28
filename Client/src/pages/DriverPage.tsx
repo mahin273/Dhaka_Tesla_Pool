@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -6,11 +6,15 @@ import { Navbar } from '../components/Navbar';
 import { DriverStatusToggle } from '../components/driver/DriverStatusToggle';
 import { CandidateRadar } from '../components/driver/CandidateRadar';
 import { ActivePoolCockpit } from '../components/driver/ActivePoolCockpit';
+import { DriverCompletionModal } from '../components/driver/DriverCompletionModal';
 import { Tesla, CandidateResponse, Pool } from '../types';
 import { Radio, Power, Shield } from 'lucide-react';
 
 export const DriverPage: React.FC = () => {
   const { user } = useAuth();
+  const [completedPoolReceipt, setCompletedPoolReceipt] = useState<Pool | null>(
+    null,
+  );
 
   // 1. Fetch driver's Tesla vehicle details
   const {
@@ -123,6 +127,9 @@ export const DriverPage: React.FC = () => {
             {hasActiveTrip && (
               <ActivePoolCockpit
                 pool={activePool}
+                onTripCompleted={(completed) => {
+                  setCompletedPoolReceipt(completed);
+                }}
                 onLifecycleAdvanced={() => {
                   refetchPool();
                   refetchCandidates();
@@ -144,6 +151,13 @@ export const DriverPage: React.FC = () => {
               }}
             />
           </div>
+        )}
+
+        {completedPoolReceipt && (
+          <DriverCompletionModal
+            pool={completedPoolReceipt}
+            onClose={() => setCompletedPoolReceipt(null)}
+          />
         )}
       </main>
     </div>

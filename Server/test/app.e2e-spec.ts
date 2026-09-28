@@ -760,4 +760,176 @@ describe('Dhaka Tesla Pool Backend (E2E Integration)', () => {
       expect(teslaFinal?.seatsAvailable).toBe(3);
     });
   });
+
+  describe('7. Trip Completion Receipt & 5-Star Rating Modal', () => {
+    let completedRideId: string;
+
+    beforeEach(async () => {
+      // Create a fresh completed ride for Nusrat
+      await request(app.getHttpServer())
+        .patch('/drivers/me/location')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ zoneId: 'BANANI' })
+        .expect(200);
+
+      const rideRes = await request(app.getHttpServer())
+        .post('/ride-requests')
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          pickupZoneId: 'BANANI',
+          pickupLat: 23.7937,
+          pickupLng: 90.4066,
+          dropoffZoneId: 'GULSHAN_1',
+          dropoffLat: 23.7806,
+          dropoffLng: 90.4163,
+          seatsRequested: 1,
+        })
+        .expect(201);
+      completedRideId = rideRes.body.id;
+
+      const claimRes = await request(app.getHttpServer())
+        .post('/pools/claim')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({
+          teslaId: bulletId,
+          rideRequestIds: [completedRideId],
+          seatsNeeded: 1,
+        })
+        .expect(201);
+      const poolId = claimRes.body.poolId;
+
+      await request(app.getHttpServer())
+        .post(`/pools/${poolId}/arrive`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(`/pools/${poolId}/start`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(`/pools/${poolId}/complete`)
+        .set('Authorization', `Bearer ${driverToken}`)
+        .expect(200);
+    });
+
+    it('should allow a passenger to rate a COMPLETED ride request with stars, tags, and comment', async () => {
+      const rateRes = await request(app.getHttpServer())
+        .post(`/ride-requests/${completedRideId}/rate`)
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          stars: 5,
+          tags: ['Clean vehicle', 'Smooth driving'],
+          comment: 'Outstanding electric ride through Gulshan',
+        })
+        .expect(201);
+
+      expect(rateRes.body.id).toBeDefined();
+      expect(rateRes.body.stars).toBe(5);
+      expect(rateRes.body.tags).toEqual(['Clean vehicle', 'Smooth driving']);
+      expect(rateRes.body.comment).toBe('Outstanding electric ride through Gulshan');
+
+      // Check rating is persisted in database
+      const ratingInDb = await prisma.rating.findUnique({
+        where: { rideRequestId: completedRideId },
+      });
+      expect(ratingInDb).toBeDefined();
+      expect(ratingInDb?.stars).toBe(5);
+
+      // Check findAllForPassenger includes rating and payment
+      const myRidesRes = await request(app.getHttpServer())
+        .get('/ride-requests/me')
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .expect(200);
+
+      const targetRide = myRidesRes.body.find((r: any) => r.id === completedRideId);
+      expect(targetRide).toBeDefined();
+      expect(targetRide.rating).toBeDefined();
+      expect(targetRide.rating.stars).toBe(5);
+      expect(targetRide.payment).toBeDefined();
+      expect(targetRide.payment.status).toBe(PaymentStatus.PENDING);
+    });
+
+    it('should reject rating a ride that is not COMPLETED', async () => {
+      const activeRes = await request(app.getHttpServer())
+        .post('/ride-requests')
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          pickupZoneId: 'BANANI',
+          pickupLat: 23.7937,
+          pickupLng: 90.4066,
+          dropoffZoneId: 'GULSHAN_1',
+          dropoffLat: 23.7806,
+          dropoffLng: 90.4163,
+          seatsRequested: 1,
+        })
+        .expect(201);
+
+      const errRes = await request(app.getHttpServer())
+        .post(`/ride-requests/${activeRes.body.id}/rate`)
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          stars: 5,
+        })
+        .expect(400);
+
+      expect(errRes.body.message).toContain('Can only rate completed rides');
+    });
+
+    it('should reject ratings outside the 1 to 5 range', async () => {
+      // 0 stars
+      await request(app.getHttpServer())
+        .post(`/ride-requests/${completedRideId}/rate`)
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          stars: 0,
+        })
+        .expect(400);
+
+      // 6 stars
+      await request(app.getHttpServer())
+        .post(`/ride-requests/${completedRideId}/rate`)
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          stars: 6,
+        })
+        .expect(400);
+    });
+
+    it('should reject duplicate rating for the same ride request', async () => {
+      // First rating succeeds
+      await request(app.getHttpServer())
+        .post(`/ride-requests/${completedRideId}/rate`)
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          stars: 5,
+        })
+        .expect(201);
+
+      // Second rating fails with 400
+      const errRes = await request(app.getHttpServer())
+        .post(`/ride-requests/${completedRideId}/rate`)
+        .set('Authorization', `Bearer ${nusratToken}`)
+        .send({
+          stars: 4,
+        })
+        .expect(400);
+
+      expect(errRes.body.message).toContain('Ride has already been rated');
+    });
+
+    it('should reject rating attempts by unauthorized users', async () => {
+      // Shirin attempts to rate Nusrat's completed ride
+      const errRes = await request(app.getHttpServer())
+        .post(`/ride-requests/${completedRideId}/rate`)
+        .set('Authorization', `Bearer ${shirinToken}`)
+        .send({
+          stars: 1,
+        })
+        .expect(403);
+
+      expect(errRes.body.message).toBeDefined();
+    });
+  });
 });

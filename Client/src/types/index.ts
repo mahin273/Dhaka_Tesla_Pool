@@ -78,6 +78,18 @@ export interface RideRequest {
   totalFarePoysha: number;
   requestedAt: string;
   cancelledAt?: string | null;
+  payment?: Payment | null;
+  rating?: Rating | null;
+}
+
+export interface Rating {
+  id: string;
+  rideRequestId: string;
+  userId: string;
+  stars: number;
+  tags: string[];
+  comment?: string | null;
+  createdAt: string;
 }
 
 export interface Pool {

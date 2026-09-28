@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
 import { FaresService } from '../fares/fares.service';
 import { CreateRideRequestDto } from './dto/create-ride-request.dto';
+import { CreateRatingDto } from './dto/create-rating.dto';
 
 @Injectable()
 export class RideRequestsService {
@@ -110,6 +111,8 @@ export class RideRequestsService {
       include: {
         pickupZone: true,
         dropoffZone: true,
+        payment: true,
+        rating: true,
         pool: {
           include: {
             tesla: {
@@ -135,6 +138,8 @@ export class RideRequestsService {
       include: {
         pickupZone: true,
         dropoffZone: true,
+        payment: true,
+        rating: true,
         pool: {
           include: {
             tesla: true,
@@ -224,5 +229,61 @@ export class RideRequestsService {
 
       return updated;
     });
+  }
+
+  async createRating(
+    user: { id: string; role?: UserRole },
+    id: string,
+    dto: CreateRatingDto,
+  ) {
+    const request = await this.prisma.rideRequest.findUnique({
+      where: { id },
+      include: {
+        pool: {
+          include: {
+            tesla: true,
+          },
+        },
+        rating: true,
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Ride request not found');
+    }
+
+    const isPassengerOwner = request.passengerId === user.id;
+    const isAssignedDriver = request.pool?.tesla?.driverId === user.id;
+
+    if (!isPassengerOwner && !isAssignedDriver) {
+      throw new ForbiddenException(
+        'You do not have permission to rate this ride request',
+      );
+    }
+
+    if (request.status !== RideStatus.COMPLETED) {
+      throw new BadRequestException('Can only rate completed rides');
+    }
+
+    if (request.rating) {
+      throw new BadRequestException('Ride has already been rated');
+    }
+
+    try {
+      return await this.prisma.rating.create({
+        data: {
+          rideRequestId: id,
+          userId: user.id,
+          stars: dto.stars,
+          tags: dto.tags ?? [],
+          comment: dto.comment,
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new BadRequestException('Ride has already been rated');
+      }
+      throw err;
+    }
   }
 }
