@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { PoolStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterTeslaDto } from './dto/register-tesla.dto';
 
@@ -71,6 +72,23 @@ export class TeslasService {
 
     if (!existing) {
       throw new BadRequestException('Driver must register a Tesla before going online');
+    }
+
+    if (!isOnline) {
+      const activePool = await this.prisma.pool.findFirst({
+        where: {
+          teslaId: existing.id,
+          status: {
+            in: [PoolStatus.MATCHED, PoolStatus.DRIVER_ARRIVED, PoolStatus.STARTED],
+          },
+        },
+      });
+
+      if (activePool) {
+        throw new BadRequestException(
+          'Cannot go offline while an active trip or pool is in progress. Please complete the trip first.',
+        );
+      }
     }
 
     return this.prisma.tesla.update({
