@@ -25,6 +25,9 @@ export class PoolsService {
   async findCandidates(driverId: string) {
     const tesla = await this.prisma.tesla.findUnique({
       where: { driverId },
+      include: {
+        currentZone: true,
+      },
     });
 
     if (!tesla) {
@@ -113,6 +116,41 @@ export class PoolsService {
     const candidates = openRequests.map((req) => {
       // If car is empty (no active riders), candidate can start a new pool
       if (activeRiders.length === 0) {
+        if (tesla.currentZone) {
+          const dispatchDist = this.matchingService.roadDistanceKm(
+            {
+              lat: tesla.currentZone.centerLat,
+              lng: tesla.currentZone.centerLng,
+            },
+            {
+              lat: req.pickupLat,
+              lng: req.pickupLng,
+            },
+          );
+
+          const isSameZone = req.pickupZoneId === tesla.currentZoneId;
+          const isNearby = dispatchDist <= 2.5;
+          const isCompatible = isSameZone || isNearby;
+
+          return {
+            rideRequestId: req.id,
+            passenger: req.passenger,
+            pickupZone: req.pickupZone,
+            dropoffZone: req.dropoffZone,
+            seatsRequested: req.seatsRequested,
+            baseFarePoysha: req.baseFarePoysha,
+            distanceChargePoysha: req.distanceChargePoysha,
+            totalFarePoysha: req.totalFarePoysha,
+            distanceKm: Number(req.distanceKm),
+            compatible: isCompatible,
+            detourKm: isCompatible ? 0 : dispatchDist,
+            pickupDistanceKm: dispatchDist,
+            reason: isCompatible
+              ? 'Within dispatch range of your staging area'
+              : `Pickup is ${dispatchDist} km from staging area (exceeds 2.5 km limit)`,
+          };
+        }
+
         return {
           rideRequestId: req.id,
           passenger: req.passenger,
@@ -690,18 +728,31 @@ export class PoolsService {
         },
       });
 
-      // Release seats back to vehicle up to capacity
+      // Release seats back to vehicle up to capacity and restage vehicle to final dropoff zone
       const freedSeats = pool.rideRequests.reduce(
         (sum, req) => sum + req.seatsRequested,
         0,
       );
 
-      await tx.$executeRaw`
-        UPDATE teslas
-        SET seats_available = LEAST(capacity, seats_available + ${freedSeats}),
-            updated_at = NOW()
-        WHERE id = ${pool.teslaId}
-      `;
+      const lastRider = pool.rideRequests[pool.rideRequests.length - 1];
+      const newZoneId = lastRider?.dropoffZoneId;
+
+      if (newZoneId) {
+        await tx.$executeRaw`
+          UPDATE teslas
+          SET seats_available = LEAST(capacity, seats_available + ${freedSeats}),
+              current_zone_id = ${newZoneId},
+              updated_at = NOW()
+          WHERE id = ${pool.teslaId}
+        `;
+      } else {
+        await tx.$executeRaw`
+          UPDATE teslas
+          SET seats_available = LEAST(capacity, seats_available + ${freedSeats}),
+              updated_at = NOW()
+          WHERE id = ${pool.teslaId}
+        `;
+      }
 
       const updatedRequests = [];
       const createdPayments = [];

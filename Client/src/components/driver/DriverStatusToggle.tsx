@@ -1,8 +1,8 @@
 import React from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import { Tesla } from '../../types';
-import { Car, Power, Users } from 'lucide-react';
+import { Tesla, Zone } from '../../types';
+import { Car, Power, Users, MapPin } from 'lucide-react';
 
 interface DriverStatusToggleProps {
   tesla: Tesla | null;
@@ -17,11 +17,26 @@ export const DriverStatusToggle: React.FC<DriverStatusToggleProps> = ({
 }) => {
   const queryClient = useQueryClient();
 
+  const { data: zones = [] } = useQuery<Zone[]>({
+    queryKey: ['zones'],
+    queryFn: () => apiClient.get<Zone[]>('/zones'),
+  });
+
   const toggleMutation = useMutation({
     mutationFn: async (targetOnline: boolean) => {
       return apiClient.patch<Tesla>('/drivers/me/online-status', {
         isOnline: targetOnline,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myTesla'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+    },
+  });
+
+  const locationMutation = useMutation({
+    mutationFn: async (zoneId: string) => {
+      return apiClient.patch<Tesla>('/drivers/me/location', { zoneId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myTesla'] });
@@ -114,16 +129,50 @@ export const DriverStatusToggle: React.FC<DriverStatusToggleProps> = ({
         </div>
       </div>
 
-      {/* Vehicle Seating Capacity */}
-      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-        <div className="text-slate-400 flex items-center gap-2">
-          <Users className="w-4 h-4 text-cyan-400" />
-          <span>Vehicle Seating Capacity</span>
+      {/* Driver Staging Hub & Capacity */}
+      <div className="pt-3 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        {/* Staging Zone Selector */}
+        <div className="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+          <div className="text-slate-400 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-amber-400" />
+            <span>Staging Hub</span>
+          </div>
+          <select
+            value={tesla?.currentZoneId || ''}
+            onChange={(e) => locationMutation.mutate(e.target.value)}
+            disabled={isLoading || locationMutation.isPending || hasActiveTrip || !tesla}
+            title={hasActiveTrip ? 'Cannot change staging hub during an active trip' : 'Select staging area'}
+            className={`bg-slate-900 border text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none transition-colors ${
+              hasActiveTrip
+                ? 'border-slate-800 text-slate-500 cursor-not-allowed'
+                : 'border-slate-700 text-white hover:border-amber-500/50 cursor-pointer'
+            }`}
+          >
+            {zones.map((zone) => (
+              <option key={zone.id} value={zone.id}>
+                {zone.name}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="text-sm font-bold text-white font-mono bg-slate-950 px-3 py-1 rounded-lg border border-slate-850">
-          {seatsAvailable} / {capacity} Seats Free
+
+        {/* Vehicle Seating Capacity */}
+        <div className="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+          <div className="text-slate-400 flex items-center gap-2">
+            <Users className="w-4 h-4 text-cyan-400" />
+            <span>Seating Capacity</span>
+          </div>
+          <div className="text-xs font-bold text-white font-mono bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800">
+            {seatsAvailable} / {capacity} Seats Free
+          </div>
         </div>
       </div>
+
+      {locationMutation.isError && (
+        <p className="text-[11px] text-rose-400 font-mono">
+          {(locationMutation.error as unknown as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to update staging area'}
+        </p>
+      )}
     </div>
   );
 };

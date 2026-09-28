@@ -44,6 +44,7 @@ export class AuthService {
                   capacity: 3,
                   seatsAvailable: 3,
                   isOnline: false,
+                  currentZoneId: 'BANANI',
                 },
               },
             }

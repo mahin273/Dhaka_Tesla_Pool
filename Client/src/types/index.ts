@@ -48,6 +48,8 @@ export interface Tesla {
   capacity: number;
   seatsAvailable: number;
   isOnline: boolean;
+  currentZoneId?: string | null;
+  currentZone?: Zone | null;
 }
 
 export interface RideRequest {
