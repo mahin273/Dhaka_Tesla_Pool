@@ -77,16 +77,6 @@ export class PoolsService {
 
     const activeRiders = activePool?.rideRequests ?? [];
 
-    if (activePool?.status === PoolStatus.STARTED) {
-      return {
-        teslaId: tesla.id,
-        seatsAvailable: tesla.seatsAvailable,
-        activePoolId: activePool.id,
-        activePassengersCount: activeRiders.length,
-        candidates: [],
-      };
-    }
-
     if (tesla.seatsAvailable <= 0) {
       return {
         teslaId: tesla.id,
@@ -359,12 +349,6 @@ export class PoolsService {
         orderBy: { matchedAt: 'desc' },
       });
 
-      if (pool && pool.status === PoolStatus.STARTED) {
-        throw new BadRequestException(
-          'Cannot add passengers to a pool that is already in transit (STARTED)',
-        );
-      }
-
       if (!pool) {
         pool = await tx.pool.create({
           data: {
@@ -379,12 +363,16 @@ export class PoolsService {
         where: {
           poolId: pool.id,
           status: {
-            in: [RideStatus.MATCHED, RideStatus.DRIVER_ARRIVED],
+            in: [
+              RideStatus.MATCHED,
+              RideStatus.DRIVER_ARRIVED,
+              RideStatus.STARTED,
+            ],
           },
         },
       });
 
-      // 4. Update ride requests to MATCHED, assign poolId, and apply overlap-based pool discount
+      // 4. Update ride requests, assign poolId, and apply overlap-based pool discount
       const updatedRequests = [];
       for (const req of requests) {
         let overlapKm = Number(req.distanceKm);
@@ -432,11 +420,21 @@ export class PoolsService {
         const totalFarePoysha =
           req.baseFarePoysha + req.distanceChargePoysha - discountPoysha;
 
+        const targetStatus =
+          pool.status === PoolStatus.STARTED
+            ? RideStatus.STARTED
+            : RideStatus.MATCHED;
+
+        const note =
+          pool.status === PoolStatus.STARTED
+            ? 'En-route passenger onboarded to in-flight pool'
+            : 'Matched to pool and seats claimed';
+
         const updatedReq = await tx.rideRequest.update({
           where: { id: req.id },
           data: {
             poolId: pool.id,
-            status: RideStatus.MATCHED,
+            status: targetStatus,
             poolDiscountPoysha: discountPoysha,
             totalFarePoysha,
           },
@@ -446,9 +444,9 @@ export class PoolsService {
           data: {
             rideRequestId: req.id,
             fromStatus: RideStatus.REQUESTED,
-            toStatus: RideStatus.MATCHED,
+            toStatus: targetStatus,
             changedById: driverId,
-            note: 'Matched to pool and seats claimed',
+            note,
           },
         });
 
@@ -514,7 +512,7 @@ export class PoolsService {
       return {
         poolId: pool.id,
         tesla: updatedTesla,
-        status: PoolStatus.MATCHED,
+        status: pool.status,
         rideRequests: updatedRequests,
       };
     });
