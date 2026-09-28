@@ -101,10 +101,11 @@ export const DriverPage: React.FC = () => {
         <DriverStatusToggle
           tesla={tesla || null}
           isLoading={teslaLoading}
+          hasActiveTrip={Boolean(hasActiveTrip)}
         />
 
         {/* Offline Notice or Tactical Cockpit */}
-        {!isOnline ? (
+        {!isOnline && !hasActiveTrip ? (
           <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-10 text-center space-y-3">
             <div className="inline-flex p-3 rounded-full bg-slate-950 border border-slate-800 text-slate-500">
               <Power className="w-6 h-6" />

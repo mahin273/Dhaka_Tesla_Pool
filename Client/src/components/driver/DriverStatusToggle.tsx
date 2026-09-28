@@ -7,11 +7,13 @@ import { Car, Power, Users } from 'lucide-react';
 interface DriverStatusToggleProps {
   tesla: Tesla | null;
   isLoading: boolean;
+  hasActiveTrip?: boolean;
 }
 
 export const DriverStatusToggle: React.FC<DriverStatusToggleProps> = ({
   tesla,
   isLoading,
+  hasActiveTrip = false,
 }) => {
   const queryClient = useQueryClient();
 
@@ -30,6 +32,7 @@ export const DriverStatusToggle: React.FC<DriverStatusToggleProps> = ({
   const isOnline = tesla?.isOnline ?? false;
   const seatsAvailable = tesla?.seatsAvailable ?? 0;
   const capacity = tesla?.capacity ?? 3;
+  const isLockedOnline = isOnline && hasActiveTrip;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
@@ -61,30 +64,53 @@ export const DriverStatusToggle: React.FC<DriverStatusToggleProps> = ({
         </div>
 
         {/* Toggle Action */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => toggleMutation.mutate(!isOnline)}
-            disabled={isLoading || toggleMutation.isPending || !tesla}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer flex items-center gap-2 shadow-md ${
-              isOnline
-                ? 'bg-emerald-500/20 hover:bg-rose-950/40 border border-emerald-500/40 hover:border-rose-800 text-emerald-300 hover:text-rose-300'
-                : 'bg-slate-800 hover:bg-emerald-950/40 border border-slate-700 hover:border-emerald-800 text-slate-300 hover:text-emerald-300'
-            }`}
-          >
-            <Power
-              className={`w-4 h-4 ${
-                toggleMutation.isPending ? 'animate-spin' : isOnline ? 'text-emerald-400' : 'text-slate-400'
+        <div className="flex flex-col sm:items-end gap-1.5">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => toggleMutation.mutate(!isOnline)}
+              disabled={isLoading || toggleMutation.isPending || !tesla || isLockedOnline}
+              title={isLockedOnline ? 'Complete ongoing trip before going offline' : undefined}
+              className={`px-4 py-2.5 rounded-xl font-semibold text-xs transition-all flex items-center gap-2 shadow-md ${
+                isLockedOnline
+                  ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 cursor-not-allowed'
+                  : isOnline
+                  ? 'bg-emerald-500/20 hover:bg-rose-950/40 border border-emerald-500/40 hover:border-rose-800 text-emerald-300 hover:text-rose-300 cursor-pointer'
+                  : 'bg-slate-800 hover:bg-emerald-950/40 border border-slate-700 hover:border-emerald-800 text-slate-300 hover:text-emerald-300 cursor-pointer'
               }`}
-            />
-            <span>
-              {toggleMutation.isPending
-                ? 'Updating Status...'
-                : isOnline
-                ? 'Go Offline'
-                : 'Go Online'}
-            </span>
-          </button>
+            >
+              <Power
+                className={`w-4 h-4 ${
+                  toggleMutation.isPending
+                    ? 'animate-spin'
+                    : isLockedOnline
+                    ? 'text-amber-400'
+                    : isOnline
+                    ? 'text-emerald-400'
+                    : 'text-slate-400'
+                }`}
+              />
+              <span>
+                {toggleMutation.isPending
+                  ? 'Updating Status...'
+                  : isLockedOnline
+                  ? 'Trip in Progress'
+                  : isOnline
+                  ? 'Go Offline'
+                  : 'Go Online'}
+              </span>
+            </button>
+          </div>
+          {isLockedOnline && (
+            <p className="text-[11px] text-amber-400/90 font-mono">
+              Complete ongoing trip to go offline
+            </p>
+          )}
+          {toggleMutation.isError && (
+            <p className="text-[11px] text-rose-400 font-mono">
+              {(toggleMutation.error as unknown as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to update status'}
+            </p>
+          )}
         </div>
       </div>
 

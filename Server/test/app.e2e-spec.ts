@@ -230,6 +230,16 @@ describe('Dhaka Tesla Pool Backend (E2E Integration)', () => {
         .expect(201);
       const poolId = claimRes.body.poolId;
 
+      // Guardrail: Driver cannot toggle offline while pool is in MATCHED status
+      const invalidOfflineRes = await request(app.getHttpServer())
+        .patch('/drivers/me/online-status')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ isOnline: false })
+        .expect(400);
+      expect(invalidOfflineRes.body.message).toContain(
+        'Cannot go offline while an active trip or pool is in progress',
+      );
+
       // Invalid: Try to start directly from MATCHED
       const invalidStartRes = await request(app.getHttpServer())
         .post(`/pools/${poolId}/start`)
@@ -292,6 +302,20 @@ describe('Dhaka Tesla Pool Backend (E2E Integration)', () => {
         .set('Authorization', `Bearer ${driverToken}`)
         .expect(400);
       expect(invalidCompleteAgain.body.message).toContain('Cannot complete trip: pool is currently in COMPLETED status');
+
+      // Valid: Driver can go offline once trip has completed
+      await request(app.getHttpServer())
+        .patch('/drivers/me/online-status')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ isOnline: false })
+        .expect(200);
+
+      // Restore driver online for subsequent tests
+      await request(app.getHttpServer())
+        .patch('/drivers/me/online-status')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({ isOnline: true })
+        .expect(200);
     });
   });
 
