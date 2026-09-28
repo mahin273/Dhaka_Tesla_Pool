@@ -431,20 +431,15 @@ The database seed script (`Server/prisma/seed.ts`) pre-populates all Dhaka trans
 The matching and pricing engines calculate travel distances using two complementary mathematical models:
 
 1. **Great-Circle Haversine Formula**:
-```text
-distance = 2 * R * arcsin( sqrt( sin^2(delta_lat / 2) + cos(lat1) * cos(lat2) * sin^2(delta_lng / 2) ) )
-```
-*(where R = 6371 km, Earth's mean radius)*
+   $$\text{distance} = 2 R \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta \text{lat}}{2}\right) + \cos(\text{lat}_1)\cos(\text{lat}_2)\sin^2\left(\frac{\Delta \text{lng}}{2}\right)}\right)$$
+   *(where $R = 6371\text{ km}$, Earth's mean radius)*
 
 2. **Dhaka Urban Winding Road Multiplier**:
-```text
-roadDistanceKm = round(haversineDistanceKm * 1.6 * 10) / 10
-```
+   $$\text{roadDistanceKm} = \text{round}(\text{haversineDistanceKm} \times 1.6 \times 10) / 10$$
 
 #### Why This Mathematical Approach?
 
-- **Why NOT Simple Euclidean Distance?**
-  - Formula: `sqrt((lat2 - lat1)^2 + (lng2 - lng1)^2)`
+- **Why NOT Simple Euclidean Distance ($\sqrt{\Delta x^2 + \Delta y^2}$)?**
   - Latitude and longitude are spherical angles on an oblate spheroid, not flat Cartesian coordinates.
   - At Dhaka's latitude (~23.8 degrees North), degrees of longitude are significantly shorter than degrees of latitude due to meridian convergence. Planar Euclidean calculations distort distances and introduce unacceptable routing errors.
 - **Why NOT Google Maps Distance Matrix API?**
@@ -453,7 +448,7 @@ roadDistanceKm = round(haversineDistanceKm * 1.6 * 10) / 10
   - **Offline & Autonomous Operation**: The matching engine runs completely self-contained within Docker containers, independent of third-party network connectivity or API key validity.
 - **Why the 1.6x Multiplier Specifically for Dhaka?**
   - Straight-line distance is physically impossible to traverse in Dhaka due to natural water barriers (Banani Lake, Gulshan Lake, Hatirjheel) and transportation infrastructure (railway corridors, one-way elevated flyover ramps).
-  - For instance, Banani to Mohakhali is approximately 1.4 km straight-line, but the real-world driving distance is approximately 2.3 km (1.4 km * 1.6 = ~2.24 km). The calibrated 1.6x factor bridges pure geometry and urban topography accurately.
+  - For instance, Banani to Mohakhali is approximately 1.4 km straight-line, but the real-world driving distance is approximately 2.3 km ($1.4 \times 1.6 \approx 2.24\text{ km}$). The calibrated 1.6x factor bridges pure geometry and urban topography accurately.
 
 ---
 
