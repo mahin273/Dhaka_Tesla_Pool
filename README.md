@@ -438,7 +438,8 @@ AI assistance and pair programming were utilized during the design and developme
 
 A full end-to-end walkthrough demonstrating passenger ride booking, driver staging, candidate radar scanning, atomic seat claiming, dynamic in-flight matching, and trip rating is available here:
 
-- **Demo Video Walkthrough**: `will be added soon`
+- **YouTube Walkthrough**: [Watch on YouTube](https://youtu.be/TVZmOGXhV_4)
+- **Google Drive Materials**: [View on Google Drive](https://drive.google.com/drive/folders/1KxMAQziZtbNJZiXu-Z6LHAdwXS0rgfvG?usp=sharing)
 
 ---
 
