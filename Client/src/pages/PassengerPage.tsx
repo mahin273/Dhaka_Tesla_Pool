@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,8 @@ import { Shield, History } from 'lucide-react';
 
 export const PassengerPage: React.FC = () => {
   const { user } = useAuth();
-  const [dismissedRideIds, setDismissedRideIds] = useState<string[]>([]);
+  const [completedRideId, setCompletedRideId] = useState<string | null>(null);
+  const lastActiveRideIdRef = useRef<string | null>(null);
 
   // Auto-polling for passenger's ride requests
   const {
@@ -34,13 +35,28 @@ export const PassengerPage: React.FC = () => {
       r.status === 'STARTED',
   );
 
-  // 2. Check for newly completed ride (not yet dismissed)
-  const completedRide = rides.find(
-    (r) => r.status === 'COMPLETED' && !dismissedRideIds.includes(r.id),
-  );
+  // 2. Track transition from active ride to completed ride during active session
+  useEffect(() => {
+    if (activeRide) {
+      lastActiveRideIdRef.current = activeRide.id;
+    } else if (lastActiveRideIdRef.current) {
+      const finishedRide = rides.find(
+        (r) => r.id === lastActiveRideIdRef.current && r.status === 'COMPLETED',
+      );
+      if (finishedRide) {
+        setCompletedRideId(finishedRide.id);
+      }
+      lastActiveRideIdRef.current = null;
+    }
+  }, [activeRide, rides]);
 
-  const handleDismissReceipt = (rideId: string) => {
-    setDismissedRideIds((prev) => [...prev, rideId]);
+  // 3. Receipt to display: only if completed during active session or selected from history
+  const completedRide = completedRideId
+    ? rides.find((r) => r.id === completedRideId)
+    : null;
+
+  const handleDismissReceipt = () => {
+    setCompletedRideId(null);
   };
 
   const pastRides = rides.filter(
@@ -87,7 +103,7 @@ export const PassengerPage: React.FC = () => {
         ) : completedRide ? (
           <TripReceipt
             ride={completedRide}
-            onBookAgain={() => handleDismissReceipt(completedRide.id)}
+            onBookAgain={handleDismissReceipt}
             onRatingSubmitted={() => refetch()}
           />
         ) : (
@@ -112,7 +128,14 @@ export const PassengerPage: React.FC = () => {
                 return (
                   <div
                     key={trip.id}
-                    className="p-3 rounded-xl bg-slate-950 border border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                    onClick={() => {
+                      if (isCompleted) {
+                        setCompletedRideId(trip.id);
+                      }
+                    }}
+                    className={`p-3 rounded-xl bg-slate-950 border border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                      isCompleted ? 'cursor-pointer hover:border-slate-700 transition' : ''
+                    }`}
                   >
                     <div>
                       <div className="font-medium text-slate-200">
