@@ -127,90 +127,102 @@ graph TB
 
 ```mermaid
 erDiagram
-    User ||--o| Tesla : drives
-    User ||--o{ RideRequest : requests
-    User ||--o{ RideStatusHistory : records
-    User ||--o{ Rating : writes
-    Zone ||--o{ Tesla : stages
-    Zone ||--o{ RideRequest : pickup
-    Zone ||--o{ RideRequest : dropoff
-    Tesla ||--o{ Pool : assigned
-    Pool ||--o{ RideRequest : pools
-    RideRequest ||--o{ RideStatusHistory : tracks
-    RideRequest ||--o| Payment : bills
-    RideRequest ||--o| Rating : rates
-
     User {
-        string id PK
-        string email UK
-        string passwordHash
-        string fullName
-        string phone UK
-        enum role "PASSENGER | DRIVER"
-        datetime createdAt
+        String id PK
+        String email UK
+        String passwordHash
+        String fullName
+        String phone UK
+        UserRole role
+        DateTime createdAt
+        DateTime updatedAt
     }
-
     Tesla {
-        string id PK
-        string driverId UK,FK
-        string name
-        int capacity
-        int seatsAvailable "CHECK seats_available >= 0"
-        boolean isOnline
-        string currentZoneId FK
+        String id PK
+        String driverId FK,UK
+        String name
+        Int capacity
+        Int seatsAvailable
+        Boolean isOnline
+        String currentZoneId FK
+        DateTime createdAt
+        DateTime updatedAt
     }
-
     Zone {
-        string id PK
-        string name
-        float lat
-        float lng
-        enum macroZone "NORTH | CENTRAL | SOUTH"
-        string corridorAxis
-        int corridorIndex
+        String id PK
+        String name UK
+        Float centerLat
+        Float centerLng
     }
-
     Pool {
-        string id PK
-        string teslaId FK
-        enum status "MATCHED | DRIVER_ARRIVED | STARTED | COMPLETED | CANCELLED"
-        datetime matchedAt
-        datetime completedAt
+        String id PK
+        String teslaId FK
+        PoolStatus status
+        DateTime matchedAt
+        DateTime driverArrivedAt
+        DateTime startedAt
+        DateTime completedAt
+        DateTime cancelledAt
     }
-
     RideRequest {
-        string id PK
-        string passengerId FK
-        string poolId FK
-        string pickupZoneId FK
-        string dropoffZoneId FK
-        int seatsRequested
-        enum status "REQUESTED | MATCHED | DRIVER_ARRIVED | STARTED | COMPLETED | CANCELLED"
-        float distanceKm
-        int baseFarePoysha
-        int distanceChargePoysha
-        int poolDiscountPoysha
-        int totalFarePoysha
+        String id PK
+        String passengerId FK
+        String poolId FK
+        String pickupZoneId FK
+        Float pickupLat
+        Float pickupLng
+        String dropoffZoneId FK
+        Float dropoffLat
+        Float dropoffLng
+        Int seatsRequested
+        RideStatus status
+        Decimal distanceKm
+        Int baseFarePoysha
+        Int distanceChargePoysha
+        Int poolDiscountPoysha
+        Int totalFarePoysha
+        DateTime requestedAt
+        DateTime cancelledAt
     }
-
+    RideStatusHistory {
+        String id PK
+        String rideRequestId FK
+        RideStatus fromStatus
+        RideStatus toStatus
+        String changedById FK
+        DateTime changedAt
+        String note
+    }
     Payment {
-        string id PK
-        string rideRequestId UK,FK
-        enum method "CASH | TESLAPAY"
-        int amountPoysha
-        enum status "PENDING | COMPLETED | FAILED"
-        datetime paidAt
+        String id PK
+        String rideRequestId FK,UK
+        PaymentMethod method
+        Int amountPoysha
+        PaymentStatus status
+        DateTime paidAt
     }
-
     Rating {
-        string id PK
-        string rideRequestId UK,FK
-        string userId FK
-        int stars "1 to 5"
-        string[] tags
-        string comment
-        datetime createdAt
+        String id PK
+        String rideRequestId FK,UK
+        String userId FK
+        Int stars
+        String tags
+        String comment
+        DateTime createdAt
     }
+    User ||--o{ Tesla : "driverId"
+    Zone ||--o{ Tesla : "currentZoneId"
+    Tesla ||--o{ Pool : "teslaId"
+    User ||--o{ RideRequest : "passengerId"
+    Pool ||--o{ RideRequest : "poolId"
+    Zone ||--o{ RideRequest : "pickupZoneId"
+    Zone ||--o{ RideRequest : "dropoffZoneId"
+    RideRequest ||--o{ RideStatusHistory : "rideRequestId"
+    User ||--o{ RideStatusHistory : "changedById"
+    RideRequest ||--o{ Payment : "rideRequestId"
+    RideRequest ||--o{ Rating : "rideRequestId"
+    User ||--o{ Rating : "userId"
+
 ```
 
 ---
