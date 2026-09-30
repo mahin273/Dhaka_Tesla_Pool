@@ -2,7 +2,29 @@
 
 Share a seat. Split the fare. Survive Dhaka traffic.
 
-**Live Application**: [https://dhaka-tesla-pool-delta.vercel.app](https://dhaka-tesla-pool-delta.vercel.app) | **API Base**: [https://dhaka-tesla-pool-mahin.onrender.com](https://dhaka-tesla-pool-mahin.onrender.com)
+**Live Application**: [https://dhaka-tesla-pool-delta.vercel.app](https://dhaka-tesla-pool-delta.vercel.app) | **API Base**: [https://dhaka-tesla-pool-mahin.onrender.com](https://dhaka-tesla-pool-mahin.onrender.com) | **Demo Video**: [Watch on YouTube](https://youtu.be/TVZmOGXhV_4)
+
+---
+
+## Table of Contents
+
+1. [Summary](#1-summary)
+2. [Problem Statement](#2-problem-statement)
+3. [Features Implemented](#3-features-implemented)
+4. [Screenshots & Interface Previews](#4-screenshots--interface-previews)
+5. [System Architecture](#5-system-architecture)
+6. [Entity Relationship Diagram (ERD)](#6-entity-relationship-diagram-erd)
+7. [Tech Stack, Project Structure & Prerequisites](#7-tech-stack-project-structure--prerequisites)
+8. [Environment Variables](#8-environment-variables)
+9. [Local Setup & Docker Instructions](#9-local-setup--docker-instructions)
+10. [Automated Tests & Demo Credentials](#10-automated-tests--demo-credentials)
+11. [Deployment URLs & API Overview](#11-deployment-urls--api-overview)
+12. [Key Decisions, Architectural Trade-offs & Engineering Assumptions](#12-key-decisions-architectural-trade-offs--engineering-assumptions)
+13. [Bonus: If Oi Tesla Goes Viral (Scaling to 1M Passengers & 100K Drivers)](#13-bonus-if-oi-tesla-goes-viral-scaling-to-1m-passengers--100k-drivers)
+14. [Known Limitations & Next Improvements](#14-known-limitations--next-improvements)
+15. [AI Usage](#15-ai-usage)
+16. [Demo Video](#16-demo-video)
+17. [License](#17-license)
 
 ---
 
@@ -124,6 +146,8 @@ graph TB
 ---
 
 ## 6. Entity Relationship Diagram (ERD)
+
+The database schema consists of 8 entities: `users` (passengers and drivers distinguished by role), `teslas` (vehicles with seat capacity and availability tracking), `zones` (Dhaka macro-zones with GPS centroids), `pools` (active trip containers with 5-stage lifecycle status), `ride_requests` (individual passenger bookings linked to pools), `ride_status_history` (audit trail of every lifecycle transition), `payments` (cash settlement records per rider per trip), and `ratings` (1-5 star feedback with tag chips).
 
 ![Database Entity Relationship Diagram](./docs/ERD/erd.svg)
 
@@ -249,6 +273,7 @@ createdb -U postgres -h localhost -p 5434 dhaka_tesla_pool
 #### 2. Backend Server Setup
 ```bash
 cd Server
+cp ../.env.example .env          # Copy environment template
 npm install
 
 # Push Prisma schema and seed initial zones & test users
@@ -282,7 +307,7 @@ Covers pure fare calculation algorithms, Haversine geospatial calculations, owne
 cd Server
 npm test
 ```
-*Result: 5 test suites passed, 42 tests passed.*
+*Expected: 5 test suites, 42+ tests covering fare math, Haversine accuracy, guards, and error filters.*
 
 #### End-to-End (E2E) Integration Suite
 Executes integration tests against a live PostgreSQL database, validating real concurrency races, state machine enforcement, in-flight matching, and ratings:
@@ -290,7 +315,7 @@ Executes integration tests against a live PostgreSQL database, validating real c
 cd Server
 npm run test:e2e
 ```
-*Result: 1 test suite passed, 13 integration scenarios passed.*
+*Expected: 13+ integration scenarios covering concurrency races, state transitions, IDOR, and ratings.*
 
 ### Seeded Story Cast & Demo Credentials
 
@@ -298,7 +323,7 @@ The database seed script (`Server/prisma/seed.ts`) pre-populates all Dhaka trans
 
 | Role | Persona | Email | Password | Details |
 |---|---|---|---|---|
-| **Driver** | Captain Jashim Uddin | `jashim@tesla.dhaka` | `Password123!` | Tesla Model 3 "Bullet" (3 Seats, Staged in Banani) |
+| **Driver** | Captain Jashim Uddin | `jashim@tesla.dhaka` | `password123` | Tesla Model 3 "Bullet" (3 Seats, Staged in Banani) |
 | **Passenger 1** | Nusrat Jahan | `nusrat@tesla.dhaka` | `password123` | Banani to Mohakhali commuter |
 | **Passenger 2** | Rafiq Ahmed | `rafiq@tesla.dhaka` | `password123` | Banani to Gulshan 1 downstream rider |
 | **Passenger 3** | Shirin Akter | `shirin@tesla.dhaka` | `password123` | Dhanmondi to Farmgate cross-town commuter |
@@ -409,7 +434,215 @@ Throughout the project design and implementation, the following deliberate domai
 
 ---
 
-## 13. Known Limitations & Next Improvements
+## 13. Bonus: If Oi Tesla Goes Viral (Scaling to 1M Passengers & 100K Drivers)
+
+The current MVP handles a controlled fleet with polling-based radar and a single PostgreSQL instance. This section reasons through the architectural evolution required to serve 1,000,000 passengers and 100,000 drivers without over-building the MVP, identifying what breaks first and which changes deliver the highest return.
+
+### Bottleneck Analysis
+
+Before scaling anything, identify what fails first at volume:
+
+1. **Ride Matching Load**: Every driver polls the candidate radar every 3 seconds. At 100K drivers, this produces approximately 33,000 requests per second on a single endpoint, each running geospatial calculations and corridor compatibility checks against all open ride requests.
+2. **Seat Claim Contention**: The atomic `UPDATE teslas SET seats_available = seats_available - N WHERE seats_available >= N` query becomes a row-level contention hotspot when dozens of drivers simultaneously attempt to claim the same high-demand passenger.
+3. **Polling Traffic Volume**: Both passengers and drivers poll for status updates. At scale, short-polling saturates the API tier with redundant identical responses.
+
+### Scaled Architecture Diagram
+
+```mermaid
+flowchart TB
+    subgraph Clients ["Client Applications"]
+        PA["Passenger App"]
+        DA["Driver App"]
+    end
+
+    subgraph Edge ["Edge Layer"]
+        ALB["Application Load Balancer"]
+        RL["Rate Limiter (Redis Sliding Window)"]
+    end
+
+    subgraph API ["API Cluster (Auto-Scaled)"]
+        API1["NestJS Instance 1 (Read-Heavy)"]
+        API2["NestJS Instance 2 (Read-Heavy)"]
+        API3["NestJS Instance N (Write-Heavy)"]
+    end
+
+    subgraph WS ["WebSocket Layer"]
+        WS1["Socket.IO Gateway 1"]
+        WS2["Socket.IO Gateway N"]
+    end
+
+    subgraph Workers ["Background Workers"]
+        Q["BullMQ Job Processors"]
+    end
+
+    subgraph Data ["Data Layer"]
+        PG_W[("PostgreSQL Primary + PostGIS")]
+        PG_R1[("Read Replica 1")]
+        PG_R2[("Read Replica 2")]
+        REDIS[("Redis Cluster")]
+    end
+
+    PA & DA --> ALB
+    ALB --> RL
+    RL --> API1 & API2 & API3
+    RL --> WS1 & WS2
+    WS1 & WS2 <--> REDIS
+    API1 & API2 & API3 --> PG_W
+    API1 & API2 & API3 --> PG_R1 & PG_R2
+    API1 & API2 & API3 --> REDIS
+    API1 & API2 & API3 --> Q
+    Q --> PG_W
+    Q --> REDIS
+```
+
+### Scaling Strategy by Domain
+
+#### Load Balancing & Horizontal Scaling
+
+The NestJS API tier is stateless (JWT tokens are self-contained), enabling horizontal scaling behind an Application Load Balancer without sticky sessions. API instances are split into two auto-scale groups based on workload profile:
+
+- **Read-heavy group** (10-20 instances): Serves candidate radar queries, zone listings, ride status polling, and ride history. These endpoints are high-frequency but low-write.
+- **Write-heavy group** (4-6 instances): Handles seat claims, trip completion, payment creation, and cancellation. These endpoints require stronger single-instance compute for transaction throughput.
+
+#### Database Indexing & Read Replicas
+
+**Critical indexes** that the MVP schema requires at scale:
+
+| Index | Columns | Purpose |
+|---|---|---|
+| `idx_ride_requests_status_zone` | `(status, pickup_zone_id)` | Candidate radar filtering |
+| `idx_teslas_available_zone` | `(is_available, current_zone_id)` | Driver availability lookup |
+| `idx_pools_status` | `(status)` | Active pool filtering |
+| `idx_ride_requests_stale` | `(status, created_at)` | Stale request cleanup jobs |
+
+**Read replicas** (2-3 PostgreSQL replicas): All candidate radar queries, ride history, and zone lookups are routed to replicas. Slight replication lag (under 1 second) is acceptable for radar data. All write operations (claim, cancel, complete) remain on the primary instance.
+
+#### DB Contention Mitigation
+
+The existing atomic `WHERE seats_available >= N` pattern provides row-level locking, which is fundamentally sound. At higher contention:
+
+- **Advisory locks**: `SELECT pg_advisory_xact_lock(tesla_id)` before the seat update prevents deadlock scenarios when multiple claims target the same driver simultaneously.
+- **SKIP LOCKED**: For ride request assignment queues, `SELECT ... FOR UPDATE SKIP LOCKED` ensures that if two drivers attempt to grab the same passenger simultaneously, the second driver skips to the next candidate rather than blocking.
+
+#### Caching (Redis)
+
+| Cached Data | TTL | Rationale |
+|---|---|---|
+| Zone list and coordinates | 24 hours | Static geographic data, queried on every page load |
+| Corridor definitions | 24 hours | Static configuration, evaluated on every match |
+| Driver current zone | 5 seconds | Reduces DB reads for radar proximity checks |
+| Active request count per zone | 10 seconds | Dashboard heatmaps without hitting the database |
+
+**Not cached**: seat availability, pool lifecycle status, and payment state. These are transactional and must reflect real-time database truth.
+
+#### Geospatial Search (PostGIS)
+
+The MVP calculates Haversine distance in application code, iterating through all candidates in O(n) per driver poll. At scale, this is replaced with native PostGIS spatial queries:
+
+- Store pickup and dropoff coordinates as `GEOGRAPHY(Point, 4326)` columns.
+- Replace the JavaScript `haversineKm()` function with `ST_DWithin(pickup_point, driver_point, 1500)` backed by a GiST spatial index.
+- Proximity checks drop from O(n) full-table scans to O(log n) index lookups, executing in single-digit milliseconds even with millions of coordinate points.
+
+This is the single highest-ROI change for scaling ride matching performance.
+
+#### Queues & Event-Driven Architecture (BullMQ)
+
+Replace synchronous side-effects in the critical path with an event queue (BullMQ backed by Redis):
+
+- **Ride Requested event**: Triggers candidate evaluation asynchronously instead of waiting for driver polling cycles.
+- **Seats Claimed event**: Triggers fare recalculation, passenger notification push, and analytics logging.
+- **Trip Completed event**: Triggers payment record creation, rating prompt delivery, seat release, and driver re-staging.
+
+The critical path (seat claim) returns immediately. All downstream effects process eventually. If payment creation fails, it retries from the dead-letter queue up to 5 times over 1 hour before flagging for manual review.
+
+#### Real-Time Communication (WebSockets)
+
+**Replace polling with Socket.IO and Redis Pub/Sub adapter:**
+
+- Drivers subscribe to `zone:{zoneId}:candidates` channels. When a new ride request arrives in that zone, the server pushes the candidate card to all nearby drivers instantly.
+- Passengers subscribe to `ride:{requestId}:status` channels and receive push updates on match confirmation, driver arrival, trip start, and completion.
+- The Redis adapter enables multiple NestJS instances to share WebSocket namespaces. A message published on Instance A reaches clients connected to Instance B.
+
+This single change eliminates approximately 33,000 requests per second of radar polling traffic, replacing it with event-driven push delivery.
+
+#### Rate Limiting
+
+- **Per-user**: 60 requests per minute for passengers, 120 requests per minute for drivers (higher interaction frequency).
+- **Per-endpoint**: Seat claim endpoint limited to 10 requests per minute per driver (prevents rapid retry spam).
+- **Global circuit breaker**: 50,000 requests per minute across the entire cluster as an emergency safety valve.
+
+Implementation: Redis-backed sliding window counters via `@nestjs/throttler` with a Redis store, stateless across all API instances.
+
+#### Idempotency
+
+Critical for payment and ride operations over unreliable mobile networks in Dhaka:
+
+- Client generates an idempotency key (UUID v4) for each claim, complete, or cancel action.
+- Server stores `idempotency_key -> response` in Redis with a 24-hour TTL.
+- If the same key arrives twice (network retry, user double-tap), the server returns the cached response without re-executing the transaction.
+
+This prevents double-charging, duplicate seat claims, and phantom ride requests caused by mobile network retries.
+
+#### Ride Matching at Scale
+
+The MVP uses a supply-driven model (drivers poll for candidates). At scale, the model flips to **demand-driven matching**:
+
+1. Passenger requests a ride. The server evaluates compatibility against all available drivers in nearby zones using PostGIS spatial indexes.
+2. Server pushes the top 3 compatible drivers to the passenger's ride request via WebSocket.
+3. Those drivers see the candidate on their radar screen instantly (WebSocket push, not polling).
+4. First driver to claim wins (atomic seat update with advisory lock).
+
+Evaluation happens once per ride request instead of once per driver polling cycle. Combined with PostGIS, matching complexity drops from O(drivers * requests) per polling cycle to O(log n) per ride request.
+
+#### Observability
+
+Three observability pillars:
+
+- **Metrics** (Prometheus + Grafana): Request latency at p50, p95, and p99 percentiles. Seat claim success and failure rates. Queue depth and processing lag. Active WebSocket connection count. Database connection pool utilization.
+- **Structured Logging** (JSON format to ELK or CloudWatch): Every ride lifecycle transition logged with a correlation ID combining `pool_id`, `request_id`, and `driver_id` for end-to-end traceability.
+- **Distributed Tracing** (OpenTelemetry): Traces a single ride request from the API gateway through the matching service, database query, queue publish, and WebSocket push. Identifies where latency hides in the full request lifecycle.
+
+**Critical alert**: If the seat claim failure rate exceeds 20% within a 5-minute window, it signals database contention. This triggers auto-scaling investigation or lock contention analysis.
+
+#### Retry & Failure Strategy
+
+| Failure Mode | Strategy |
+|---|---|
+| Database connection failure | Prisma connection pool retry (3 attempts, exponential backoff from 100ms) |
+| Seat claim race loss (WHERE returns 0 rows) | Return HTTP 409 Conflict, client displays "Someone else claimed this ride" and refreshes candidates |
+| Payment creation failure | Dead-letter queue, retried up to 5 times over 1 hour, then flagged for manual review |
+| WebSocket disconnection | Client auto-reconnects with exponential backoff, server sends current state snapshot on reconnect |
+| Queue worker crash | BullMQ automatic job retry with configurable backoff and max attempts |
+
+#### Security Hardening
+
+- **JWT with short expiry** (15 minutes) paired with refresh tokens (7 days) stored in httpOnly cookies to prevent XSS token theft.
+- **Row-level authorization**: Drivers can only see and claim candidates within their active pool context. Passengers can only access their own ride data. Enforced at the service layer, not just the controller.
+- **Input validation**: All DTOs validated with `class-validator` decorators (already implemented). Zone ID existence checks added at the service layer.
+- **CORS restriction**: Production CORS origin restricted to the specific frontend domain (replacing the current wildcard `*` configuration).
+- **HTTPS everywhere**: TLS termination at the load balancer with HTTP Strict Transport Security headers.
+
+#### Deployment Strategy
+
+- **Container orchestration**: Kubernetes (EKS or GKE) with separate Deployment manifests for the API cluster, WebSocket gateway, and background queue workers. Each scales independently based on its resource profile.
+- **Managed database**: PostgreSQL on a managed service (Neon with autoscaling, or RDS Multi-AZ for automatic failover).
+- **Redis cluster**: Managed Redis (ElastiCache or Memorystore) serving caching, pub/sub, rate limiting, queues, and idempotency storage from a single cluster.
+- **Zero-downtime rollouts**: Blue-green deployments. Database migrations execute as a separate Kubernetes Job before application pod rollout (consistent with the current `prisma migrate deploy` first approach).
+- **Feature flags**: Gradual rollout of new matching algorithms and fare models behind feature flags, enabling percentage-based canary releases without redeployment.
+
+### Top 5 Changes by Impact
+
+If constrained to five changes that deliver 80% of the scaling benefit:
+
+1. **PostGIS for geospatial queries**: Eliminates O(n) matching, enables sub-millisecond proximity lookups.
+2. **WebSockets replacing polling**: Cuts approximately 90% of API traffic volume.
+3. **Read replicas for radar queries**: Removes read pressure from the primary database.
+4. **Event queue for side-effects**: Keeps the critical transaction path fast and failure-resilient.
+5. **Redis caching for static data**: Eliminates repetitive zone and corridor lookups on every request.
+
+---
+
+## 14. Known Limitations & Next Improvements
 
 ### Current Limitations
 - **Single Active Corridor Axis**: Seeding focuses on the primary North-Central corridor (Airport Highway and Gulshan Axis). Additional arterial routes (e.g., Mirpur to Motijheel) require corridor graph configuration.
@@ -424,7 +657,7 @@ Throughout the project design and implementation, the following deliberate domai
 
 ---
 
-## 14. AI Usage
+## 15. AI Usage
 
 AI assistance and pair programming were utilized during the design and development of Dhaka Tesla Pool:
 
@@ -434,7 +667,7 @@ AI assistance and pair programming were utilized during the design and developme
 
 ---
 
-## 15. Demo Video
+## 16. Demo Video
 
 A full end-to-end walkthrough demonstrating passenger ride booking, driver staging, candidate radar scanning, atomic seat claiming, dynamic in-flight matching, and trip rating is available here:
 
@@ -443,6 +676,6 @@ A full end-to-end walkthrough demonstrating passenger ride booking, driver stagi
 
 ---
 
-## 16. License
+## 17. License
 
 This project is licensed under the MIT License.
